@@ -25,7 +25,6 @@ export function GameCard() {
   });
   const [showResult, setShowResult] = useState(false);
   const [isCorrect, setIsCorrect] = useState(false);
-  const [phase, setPhase] = useState<'article' | 'translation'>('article');
 
   // Generate new question
   const generateQuestion = () => {
@@ -46,21 +45,26 @@ export function GameCard() {
     setSelectedArticle(null);
     setSelectedChoice(null);
     setShowResult(false);
-    setPhase('article');
   };
 
   // Handle article selection
   const handleArticleSelect = (article: string) => {
     setSelectedArticle(article);
-    setPhase('translation');
+    checkAnswer(article, selectedChoice);
   };
 
   // Handle translation selection
   const handleTranslationSelect = (choice: string) => {
     setSelectedChoice(choice);
+    checkAnswer(selectedArticle, choice);
+  };
+
+  // Check if both selections are made and process answer
+  const checkAnswer = (article: string | null, translation: string | null) => {
+    if (!article || !translation) return;
     
-    const isArticleCorrect = selectedArticle === currentWord?.article;
-    const isTranslationCorrect = choice === currentWord?.english[0];
+    const isArticleCorrect = article === currentWord?.article;
+    const isTranslationCorrect = translation === currentWord?.english[0];
     const bothCorrect = isArticleCorrect && isTranslationCorrect;
     
     setIsCorrect(bothCorrect);
@@ -123,50 +127,54 @@ export function GameCard() {
         </CardHeader>
 
         <CardContent className="space-y-6">
-          {/* Article Selection Phase */}
-          {phase === 'article' && (
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-center">Choose the article:</h3>
-              <div className="grid grid-cols-3 gap-3">
-                {articles.map((article) => (
-                  <Button
-                    key={article}
-                    variant="article"
-                    className={`h-16 ${selectedArticle === article ? 'ring-2 ring-ring' : ''}`}
-                    onClick={() => handleArticleSelect(article)}
-                  >
-                    {article}
-                  </Button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Translation Selection Phase */}
-          {phase === 'translation' && !showResult && (
-            <div className="space-y-4">
-              <div className="text-center">
-                <div className="text-lg font-semibold">
-                  <span className={selectedArticle === currentWord.article ? 'text-success' : 'text-destructive'}>
-                    {selectedArticle}
-                  </span>
-                  {' '}{currentWord.german}
+          {!showResult && (
+            <>
+              {/* Article Selection */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-center">Choose the article:</h3>
+                <div className="grid grid-cols-3 gap-3">
+                  {articles.map((article) => (
+                    <Button
+                      key={article}
+                      variant="article"
+                      className={`h-16 ${selectedArticle === article ? 'ring-2 ring-ring' : ''}`}
+                      onClick={() => handleArticleSelect(article)}
+                    >
+                      {article}
+                    </Button>
+                  ))}
                 </div>
-                <p className="text-muted-foreground mt-2">What does this mean in English?</p>
               </div>
+
+              {/* Word Display */}
+              <div className="text-center">
+                <div className="text-3xl font-bold text-german-black mb-2">
+                  {selectedArticle && (
+                    <span className={selectedArticle === currentWord.article ? 'text-success' : 'text-destructive'}>
+                      {selectedArticle}{' '}
+                    </span>
+                  )}
+                  {currentWord.german}
+                </div>
+                <p className="text-muted-foreground">What does this mean in English?</p>
+              </div>
+
+              {/* Translation Selection */}
               <div className="space-y-3">
                 {choices.map((choice, index) => (
                   <Button
                     key={index}
                     variant="choice"
-                    className="w-full justify-start h-auto min-h-[3rem]"
+                    className={`w-full justify-start h-auto min-h-[3rem] ${
+                      selectedChoice === choice ? 'ring-2 ring-ring' : ''
+                    }`}
                     onClick={() => handleTranslationSelect(choice)}
                   >
                     {choice}
                   </Button>
                 ))}
               </div>
-            </div>
+            </>
           )}
 
           {/* Result Phase */}
