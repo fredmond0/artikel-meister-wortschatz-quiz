@@ -118,12 +118,14 @@ export function GameCard() {
       {/* Main Game Card */}
       <Card className="bg-gradient-background border-2">
         <CardHeader className="text-center pb-4">
-          <CardTitle className="text-3xl font-bold text-german-black">
-            {currentWord.german}
-          </CardTitle>
-          <Badge variant="outline" className="mx-auto">
-            {currentWord.difficulty}
-          </Badge>
+          <div className="flex items-center justify-center gap-4">
+            <Badge variant="outline">
+              {currentWord.difficulty}
+            </Badge>
+            <Badge variant="secondary">
+              #{germanWords.findIndex(w => w.german === currentWord.german) + 1} of 1000
+            </Badge>
+          </div>
         </CardHeader>
 
         <CardContent className="space-y-6">
