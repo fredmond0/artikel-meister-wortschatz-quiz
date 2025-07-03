@@ -1,10 +1,9 @@
 import { Brain, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 export function Header() {
   const navigate = useNavigate();
-  const location = useLocation();
 
   return (
     <header className="bg-gradient-primary text-primary-foreground py-6 px-4">
@@ -20,20 +19,13 @@ export function Header() {
           </p>
         </div>
         
-        <div className="flex justify-center gap-4">
+        <div className="flex justify-center">
           <Button
-            variant={location.pathname === '/' ? 'secondary' : 'outline'}
+            variant="secondary"
             onClick={() => navigate('/')}
             className="bg-white/10 text-white border-white/20 hover:bg-white/20"
           >
             Article Quiz
-          </Button>
-          <Button
-            variant={location.pathname === '/matching' ? 'secondary' : 'outline'}
-            onClick={() => navigate('/matching')}
-            className="bg-white/10 text-white border-white/20 hover:bg-white/20"
-          >
-            Match Madness
           </Button>
         </div>
       </div>

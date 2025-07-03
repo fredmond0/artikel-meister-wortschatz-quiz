@@ -61,6 +61,32 @@ export function GameCard() {
 
   // Check if both selections are made and process answer
   const checkAnswer = (article: string | null, translation: string | null) => {
+    const wordHasArticle = currentWord?.article && currentWord.article.trim() !== '';
+    
+    // For words without articles, only check translation
+    if (!wordHasArticle) {
+      if (!translation) return;
+      
+      const isTranslationCorrect = translation === currentWord?.english[0];
+      setIsCorrect(isTranslationCorrect);
+      setShowResult(true);
+      
+      // Update game state
+      setGameState(prev => {
+        const newStreak = isTranslationCorrect ? prev.streak + 1 : 0;
+        const points = isTranslationCorrect ? (10 + newStreak * 2) : 0;
+        
+        return {
+          score: prev.score + points,
+          streak: newStreak,
+          totalQuestions: prev.totalQuestions + 1,
+          correctAnswers: prev.correctAnswers + (isTranslationCorrect ? 1 : 0)
+        };
+      });
+      return;
+    }
+    
+    // For words with articles, check both article and translation
     if (!article || !translation) return;
     
     const isArticleCorrect = article === currentWord?.article;
@@ -118,12 +144,9 @@ export function GameCard() {
       {/* Main Game Card */}
       <Card className="bg-gradient-background border-2">
         <CardHeader className="text-center pb-4">
-          <div className="flex items-center justify-center gap-4">
-            <Badge variant="outline">
-              {currentWord.difficulty}
-            </Badge>
-            <Badge variant="secondary">
-              #{germanWords.findIndex(w => w.german === currentWord.german) + 1} of 1000
+          <div className="flex items-center justify-center">
+            <Badge variant="outline" className="px-3 py-1 rounded-full">
+              {currentWord.type}
             </Badge>
           </div>
         </CardHeader>
@@ -131,27 +154,29 @@ export function GameCard() {
         <CardContent className="space-y-6">
           {!showResult && (
             <>
-              {/* Article Selection */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-center">Choose the article:</h3>
-                <div className="grid grid-cols-3 gap-3">
-                  {articles.map((article) => (
-                    <Button
-                      key={article}
-                      variant="article"
-                      className={`h-16 ${selectedArticle === article ? 'ring-2 ring-ring' : ''}`}
-                      onClick={() => handleArticleSelect(article)}
-                    >
-                      {article}
-                    </Button>
-                  ))}
+              {/* Article Selection - Only show if word has an article */}
+              {currentWord.article && currentWord.article.trim() !== '' && (
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-center">Choose the article:</h3>
+                  <div className="grid grid-cols-3 gap-3">
+                    {articles.filter(article => article !== '').map((article) => (
+                      <Button
+                        key={article}
+                        variant="article"
+                        className={`h-16 ${selectedArticle === article ? 'ring-2 ring-ring' : ''}`}
+                        onClick={() => handleArticleSelect(article)}
+                      >
+                        {article}
+                      </Button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Word Display */}
               <div className="text-center">
                 <div className="text-3xl font-bold text-german-black mb-2">
-                  {selectedArticle && (
+                  {currentWord.article && currentWord.article.trim() !== '' && selectedArticle && (
                     <span className={selectedArticle === currentWord.article ? 'text-success' : 'text-destructive'}>
                       {selectedArticle}{' '}
                     </span>
@@ -200,12 +225,15 @@ export function GameCard() {
               
               <div className="space-y-2 p-4 bg-muted rounded-lg">
                 <div className="font-semibold">
-                  <span className="text-success">{currentWord.article}</span> {currentWord.german}
+                  {currentWord.article && currentWord.article.trim() !== '' && (
+                    <span className="text-success">{currentWord.article} </span>
+                  )}
+                  {currentWord.german}
                 </div>
                 <div className="text-muted-foreground">
                   means: <span className="font-medium">{currentWord.english.join(', ')}</span>
                 </div>
-                {selectedArticle !== currentWord.article && (
+                {currentWord.article && currentWord.article.trim() !== '' && selectedArticle !== currentWord.article && (
                   <div className="text-sm text-destructive">
                     You chose: {selectedArticle} (incorrect article)
                   </div>
