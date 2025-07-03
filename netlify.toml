@@ -5,6 +5,12 @@
 [functions]
   directory = "netlify/functions"
 
+[dev]
+  command = "npm run dev"
+  targetPort = 8081
+  port = 8888
+  autoLaunch = false
+
 [[headers]]
   for = "/*"
   [headers.values]

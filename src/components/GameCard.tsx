@@ -173,27 +173,34 @@ export function GameCard() {
   return (
     <div className="w-full max-w-md mx-auto space-y-4">
       {/* Stats */}
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center p-4 bg-white/60 backdrop-blur-sm rounded-xl border border-white/20 shadow-sm">
         <div className="flex items-center gap-2">
-          <Trophy className="h-5 w-5 text-german-gold" />
-          <span className="font-bold text-lg">{gameState.score}</span>
+          <div className="p-1.5 bg-german-gold/20 rounded-full">
+            <Trophy className="h-5 w-5 text-german-gold" />
+          </div>
+          <span className="font-bold text-lg text-german-black">{gameState.score}</span>
         </div>
         <div className="flex items-center gap-2">
-          <Zap className="h-5 w-5 text-primary" />
-          <Badge variant={gameState.streak > 0 ? "default" : "secondary"}>
+          <div className="p-1.5 bg-primary/20 rounded-full">
+            <Zap className="h-5 w-5 text-primary" />
+          </div>
+          <Badge variant={gameState.streak > 0 ? "default" : "secondary"} className="font-semibold">
             {gameState.streak} streak
           </Badge>
         </div>
-        <div className="text-sm text-muted-foreground">
+        <div className="text-sm font-medium text-german-black">
           {gameState.correctAnswers}/{gameState.totalQuestions}
         </div>
       </div>
 
       {/* Main Game Card */}
-      <Card className="bg-gradient-background border-2">
+      <Card className="bg-gradient-background border-2 border-german-gold/30 shadow-xl">
         <CardHeader className="text-center pb-4">
           <div className="flex items-center justify-center">
-            <Badge variant="outline" className="px-3 py-1 rounded-full">
+            <Badge 
+              variant="outline" 
+              className="px-4 py-2 rounded-full text-sm font-semibold bg-german-gold/10 border-german-gold/30 text-german-black uppercase tracking-wide"
+            >
               {currentWord.type}
             </Badge>
           </div>
@@ -205,13 +212,17 @@ export function GameCard() {
               {/* Article Selection - Only show if word has an article */}
               {currentWord.article && currentWord.article.trim() !== '' && (
                 <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-center">Choose the article:</h3>
+                  <h3 className="text-lg font-semibold text-center text-german-black">Wähle den Artikel:</h3>
                   <div className="grid grid-cols-3 gap-3">
                     {articles.filter(article => article !== '').map((article) => (
                       <Button
                         key={article}
                         variant="article"
-                        className={`h-16 ${selectedArticle === article ? 'ring-2 ring-ring' : ''}`}
+                        className={`h-16 font-bold text-lg transition-all duration-200 ${
+                          selectedArticle === article 
+                            ? 'ring-2 ring-german-gold shadow-lg scale-105 bg-german-gold/20' 
+                            : 'hover:scale-102 hover:shadow-md'
+                        }`}
                         onClick={() => handleArticleSelect(article)}
                       >
                         {article}
@@ -222,16 +233,16 @@ export function GameCard() {
               )}
 
               {/* Word Display */}
-              <div className="text-center">
-                <div className="text-3xl font-bold text-german-black mb-2">
+              <div className="text-center p-6 bg-white/40 rounded-xl border border-german-gold/20">
+                <div className="text-4xl font-bold text-german-black mb-3 tracking-wide">
                   {currentWord.article && currentWord.article.trim() !== '' && selectedArticle && (
                     <span className={selectedArticle === currentWord.article ? 'text-success' : 'text-destructive'}>
                       {selectedArticle}{' '}
                     </span>
                   )}
-                  {currentWord.german}
+                  <span className="text-german-red">{currentWord.german}</span>
                 </div>
-                <p className="text-muted-foreground">What does this mean in English?</p>
+                <p className="text-german-black/70 font-medium">Was bedeutet das auf Englisch?</p>
               </div>
 
               {/* Translation Selection */}
@@ -301,29 +312,35 @@ export function GameCard() {
               )}
 
               {sentenceData && (
-                <div className="space-y-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                  <h4 className="font-semibold text-blue-900 flex items-center gap-2">
-                    <BookOpen className="h-4 w-4" />
-                    Example Sentence
+                <div className="space-y-3 p-4 bg-german-gold/5 border border-german-gold/20 rounded-xl shadow-sm">
+                  <h4 className="font-semibold text-german-black flex items-center gap-2">
+                    <div className="p-1 bg-german-gold/20 rounded">
+                      <BookOpen className="h-4 w-4 text-german-gold" />
+                    </div>
+                    Beispielsatz (Example Sentence)
                   </h4>
                   
-                  <div className="space-y-2">
-                    <div className="p-3 bg-white rounded border">
-                      <p className="font-medium text-gray-900">{sentenceData.sentence}</p>
-                      <p className="text-sm text-gray-600 mt-1">{sentenceData.translation}</p>
+                  <div className="space-y-3">
+                    <div className="p-4 bg-white/80 rounded-lg border border-german-gold/10 shadow-sm">
+                      <p className="font-semibold text-german-black text-lg">{sentenceData.sentence}</p>
+                      <p className="text-sm text-german-black/70 mt-2 italic">{sentenceData.translation}</p>
                     </div>
                     
                     {sentenceData.conjugation && (
-                      <div className="p-3 bg-green-50 rounded border border-green-200">
-                        <h5 className="font-medium text-green-800 mb-1">Conjugation:</h5>
-                        <p className="text-sm text-green-700">{sentenceData.conjugation}</p>
+                      <div className="p-3 bg-success/5 rounded-lg border border-success/20">
+                        <h5 className="font-semibold text-success mb-2 flex items-center gap-1">
+                          📝 Konjugation:
+                        </h5>
+                        <p className="text-sm text-success/80 font-mono">{sentenceData.conjugation}</p>
                       </div>
                     )}
                     
                     {sentenceData.grammar_note && (
-                      <div className="p-3 bg-yellow-50 rounded border border-yellow-200">
-                        <h5 className="font-medium text-yellow-800 mb-1">Grammar Note:</h5>
-                        <p className="text-sm text-yellow-700">{sentenceData.grammar_note}</p>
+                      <div className="p-3 bg-german-gold/10 rounded-lg border border-german-gold/30">
+                        <h5 className="font-semibold text-german-black mb-2 flex items-center gap-1">
+                          💡 Grammatik-Tipp:
+                        </h5>
+                        <p className="text-sm text-german-black/80">{sentenceData.grammar_note}</p>
                       </div>
                     )}
                   </div>
@@ -335,7 +352,7 @@ export function GameCard() {
                   variant="outline"
                   onClick={fetchExampleSentence}
                   disabled={loadingSentence}
-                  className="w-full h-12 text-lg font-semibold"
+                  className="w-full h-12 text-lg font-semibold border-german-gold/30 hover:bg-german-gold/10 transition-all duration-200"
                 >
                   {loadingSentence ? (
                     <>
@@ -345,7 +362,7 @@ export function GameCard() {
                   ) : (
                     <>
                       <BookOpen className="h-4 w-4 mr-2" />
-                      Show Example Sentence
+                      Beispielsatz anzeigen
                     </>
                   )}
                 </Button>
@@ -353,9 +370,9 @@ export function GameCard() {
                 <Button 
                   variant={isCorrect ? "success" : "default"}
                   onClick={nextQuestion}
-                  className="w-full h-12 text-lg font-semibold"
+                  className="w-full h-12 text-lg font-semibold bg-gradient-primary hover:opacity-90 transition-all duration-200 shadow-lg"
                 >
-                  Next Word →
+                  Nächstes Wort →
                 </Button>
               </div>
             </div>

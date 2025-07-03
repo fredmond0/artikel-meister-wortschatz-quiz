@@ -40,10 +40,13 @@ export const handler: Handler = async (event, context) => {
   }
 
   try {
+    console.log('Function called with event:', event.httpMethod, event.body);
     const body: RequestBody = JSON.parse(event.body || '{}');
+    console.log('Parsed body:', body);
     const { german, type, english, article } = body;
 
     if (!german || !type || !english) {
+      console.log('Missing required fields:', { german, type, english });
       return {
         statusCode: 400,
         headers,
@@ -52,7 +55,10 @@ export const handler: Handler = async (event, context) => {
     }
 
     const apiKey = process.env.GEMINI_API_KEY;
+    console.log('API key present:', !!apiKey);
+    console.log('API key length:', apiKey?.length || 0);
     if (!apiKey) {
+      console.log('No API key found!');
       return {
         statusCode: 500,
         headers,
@@ -107,8 +113,9 @@ export const handler: Handler = async (event, context) => {
     }
 
     // Call Gemini API
+    console.log('Calling Gemini API with prompt length:', prompt.length);
     const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: {
@@ -133,6 +140,9 @@ export const handler: Handler = async (event, context) => {
         }),
       }
     );
+    
+    console.log('Gemini response status:', geminiResponse.status);
+    console.log('Gemini response ok:', geminiResponse.ok);
 
     if (!geminiResponse.ok) {
       throw new Error(`Gemini API error: ${geminiResponse.status}`);
@@ -161,12 +171,15 @@ export const handler: Handler = async (event, context) => {
 
   } catch (error) {
     console.error('Error in get-sentence function:', error);
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack');
+    console.error('Request body was:', event.body);
     return {
       statusCode: 500,
       headers,
       body: JSON.stringify({ 
         error: 'Failed to generate sentence', 
-        details: error instanceof Error ? error.message : 'Unknown error' 
+        details: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : 'No stack'
       }),
     };
   }
