@@ -35,15 +35,28 @@ export function GameCard() {
   const [sentenceData, setSentenceData] = useState<SentenceData | null>(null);
   const [loadingSentence, setLoadingSentence] = useState(false);
   const [sentenceError, setSentenceError] = useState<string | null>(null);
+  
+  // Review Mode Features
+  const [incorrectWords, setIncorrectWords] = useState<GermanWord[]>([]);
+  const [isReviewMode, setIsReviewMode] = useState(false);
 
   // Generate new question
   const generateQuestion = () => {
-    const randomWord = germanWords[Math.floor(Math.random() * germanWords.length)];
+    // Choose word source based on review mode
+    const wordSource = isReviewMode && incorrectWords.length > 0 ? incorrectWords : germanWords;
+    const randomWord = wordSource[Math.floor(Math.random() * wordSource.length)];
     setCurrentWord(randomWord);
     
-    // Generate wrong choices for translation
-    const wrongChoices = germanWords
-      .filter(w => w.german !== randomWord.german)
+    // Generate wrong choices for translation - filter by same word type for better difficulty
+    const sameTypeWords = germanWords.filter(w => 
+      w.german !== randomWord.german && w.type === randomWord.type
+    );
+    
+    // If we don't have enough words of the same type, fall back to all words
+    const fallbackWords = germanWords.filter(w => w.german !== randomWord.german);
+    const sourceForChoices = sameTypeWords.length >= 3 ? sameTypeWords : fallbackWords;
+    
+    const wrongChoices = sourceForChoices
       .map(w => w.english[0])
       .sort(() => Math.random() - 0.5)
       .slice(0, 3);
@@ -84,6 +97,17 @@ export function GameCard() {
       setIsCorrect(isTranslationCorrect);
       setShowResult(true);
       
+      // Track incorrect words for review mode
+      if (!isTranslationCorrect && currentWord) {
+        setIncorrectWords(prev => {
+          const exists = prev.some(w => w.german === currentWord.german);
+          return exists ? prev : [...prev, currentWord];
+        });
+      } else if (isTranslationCorrect && currentWord && isReviewMode) {
+        // Remove word from incorrect list when answered correctly in review mode
+        setIncorrectWords(prev => prev.filter(w => w.german !== currentWord.german));
+      }
+      
       // Update game state
       setGameState(prev => {
         const newStreak = isTranslationCorrect ? prev.streak + 1 : 0;
@@ -108,6 +132,17 @@ export function GameCard() {
     
     setIsCorrect(bothCorrect);
     setShowResult(true);
+    
+    // Track incorrect words for review mode
+    if (!bothCorrect && currentWord) {
+      setIncorrectWords(prev => {
+        const exists = prev.some(w => w.german === currentWord.german);
+        return exists ? prev : [...prev, currentWord];
+      });
+    } else if (bothCorrect && currentWord && isReviewMode) {
+      // Remove word from incorrect list when answered correctly in review mode
+      setIncorrectWords(prev => prev.filter(w => w.german !== currentWord.german));
+    }
     
     // Update game state
     setGameState(prev => {
@@ -163,10 +198,38 @@ export function GameCard() {
     generateQuestion();
   };
 
+  // Start review mode
+  const startReviewMode = () => {
+    if (incorrectWords.length > 0) {
+      setIsReviewMode(true);
+      generateQuestion();
+    }
+  };
+
+  // Exit review mode
+  const exitReviewMode = () => {
+    setIsReviewMode(false);
+    generateQuestion();
+  };
+
+  // Clear incorrect words
+  const clearIncorrectWords = () => {
+    setIncorrectWords([]);
+  };
+
   // Initialize first question
   useEffect(() => {
     generateQuestion();
   }, []);
+
+  // Auto-exit review mode when all words are mastered
+  useEffect(() => {
+    if (isReviewMode && incorrectWords.length === 0) {
+      setTimeout(() => {
+        setIsReviewMode(false);
+      }, 1000); // Small delay to let user see the completion
+    }
+  }, [isReviewMode, incorrectWords.length]);
 
   if (!currentWord) return null;
 
@@ -191,6 +254,44 @@ export function GameCard() {
         <div className="text-sm font-medium text-german-black">
           {gameState.correctAnswers}/{gameState.totalQuestions}
         </div>
+      </div>
+
+      {/* Review Mode Controls */}
+      <div className="flex gap-2 justify-center">
+        {!isReviewMode && incorrectWords.length > 0 && (
+          <Button 
+            variant="outline" 
+            onClick={startReviewMode}
+            className="flex items-center gap-2 bg-german-red/10 border-german-red/30 hover:bg-german-red/20 text-german-red font-semibold"
+          >
+            <BookOpen className="h-4 w-4" />
+            Review ({incorrectWords.length} words)
+          </Button>
+        )}
+        
+        {isReviewMode && (
+          <div className="flex gap-2">
+            <Badge variant="destructive" className="px-3 py-1 bg-german-red">
+              Review Mode: {incorrectWords.length} words remaining
+            </Badge>
+            <Button 
+              variant="outline" 
+              onClick={exitReviewMode}
+              className="text-sm h-8 px-3"
+            >
+              Exit Review
+            </Button>
+            {incorrectWords.length === 0 && (
+              <Button 
+                variant="outline" 
+                onClick={clearIncorrectWords}
+                className="text-sm h-8 px-3"
+              >
+                Clear All
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Main Game Card */}
