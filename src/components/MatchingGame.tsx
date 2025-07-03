@@ -130,8 +130,8 @@ export function MatchingGame() {
   }, []);
 
   // Shuffle arrays for display
-  const germanWords = wordPairs.sort(() => Math.random() - 0.5);
-  const englishWords = [...wordPairs].sort(() => Math.random() - 0.5);
+  const shuffledGermanWords = wordPairs.sort(() => Math.random() - 0.5);
+  const shuffledEnglishWords = [...wordPairs].sort(() => Math.random() - 0.5);
 
   return (
     <div className="w-full max-w-4xl mx-auto space-y-4">
@@ -164,7 +164,7 @@ export function MatchingGame() {
           <div className="grid grid-cols-2 gap-6">
             {/* German Column */}
             <div className="space-y-3">
-              {germanWords.map((pair) => (
+              {shuffledGermanWords.map((pair) => (
                 <Button
                   key={`german-${pair.id}`}
                   variant="choice"
@@ -192,7 +192,7 @@ export function MatchingGame() {
 
             {/* English Column */}
             <div className="space-y-3">
-              {englishWords.map((pair) => (
+              {shuffledEnglishWords.map((pair) => (
                 <Button
                   key={`english-${pair.id}`}
                   variant="choice"
