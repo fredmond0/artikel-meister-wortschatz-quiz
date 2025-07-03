@@ -3,13 +3,20 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { germanWords, articles, type GermanWord } from '@/data/germanWords';
-import { CheckCircle, XCircle, Trophy, Zap } from 'lucide-react';
+import { CheckCircle, XCircle, Trophy, Zap, BookOpen, Loader2 } from 'lucide-react';
 
 interface GameState {
   score: number;
   streak: number;
   totalQuestions: number;
   correctAnswers: number;
+}
+
+interface SentenceData {
+  sentence: string;
+  translation: string;
+  conjugation?: string;
+  grammar_note?: string;
 }
 
 export function GameCard() {
@@ -25,6 +32,9 @@ export function GameCard() {
   });
   const [showResult, setShowResult] = useState(false);
   const [isCorrect, setIsCorrect] = useState(false);
+  const [sentenceData, setSentenceData] = useState<SentenceData | null>(null);
+  const [loadingSentence, setLoadingSentence] = useState(false);
+  const [sentenceError, setSentenceError] = useState<string | null>(null);
 
   // Generate new question
   const generateQuestion = () => {
@@ -45,6 +55,9 @@ export function GameCard() {
     setSelectedArticle(null);
     setSelectedChoice(null);
     setShowResult(false);
+    setSentenceData(null);
+    setSentenceError(null);
+    setLoadingSentence(false);
   };
 
   // Handle article selection
@@ -108,6 +121,41 @@ export function GameCard() {
         correctAnswers: prev.correctAnswers + (bothCorrect ? 1 : 0)
       };
     });
+  };
+
+  // Fetch example sentence from AI
+  const fetchExampleSentence = async () => {
+    if (!currentWord) return;
+
+    setLoadingSentence(true);
+    setSentenceError(null);
+
+    try {
+      const response = await fetch('/.netlify/functions/get-sentence', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          german: currentWord.german,
+          type: currentWord.type,
+          english: currentWord.english,
+          article: currentWord.article,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data: SentenceData = await response.json();
+      setSentenceData(data);
+    } catch (error) {
+      console.error('Error fetching sentence:', error);
+      setSentenceError('Failed to generate example sentence. Please try again.');
+    } finally {
+      setLoadingSentence(false);
+    }
   };
 
   // Start new round
@@ -245,13 +293,71 @@ export function GameCard() {
                 )}
               </div>
 
-              <Button 
-                variant={isCorrect ? "success" : "default"}
-                onClick={nextQuestion}
-                className="w-full h-12 text-lg font-semibold"
-              >
-                Next Word →
-              </Button>
+              {/* Example Sentence Display */}
+              {sentenceError && (
+                <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+                  <p className="text-sm text-destructive">{sentenceError}</p>
+                </div>
+              )}
+
+              {sentenceData && (
+                <div className="space-y-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <h4 className="font-semibold text-blue-900 flex items-center gap-2">
+                    <BookOpen className="h-4 w-4" />
+                    Example Sentence
+                  </h4>
+                  
+                  <div className="space-y-2">
+                    <div className="p-3 bg-white rounded border">
+                      <p className="font-medium text-gray-900">{sentenceData.sentence}</p>
+                      <p className="text-sm text-gray-600 mt-1">{sentenceData.translation}</p>
+                    </div>
+                    
+                    {sentenceData.conjugation && (
+                      <div className="p-3 bg-green-50 rounded border border-green-200">
+                        <h5 className="font-medium text-green-800 mb-1">Conjugation:</h5>
+                        <p className="text-sm text-green-700">{sentenceData.conjugation}</p>
+                      </div>
+                    )}
+                    
+                    {sentenceData.grammar_note && (
+                      <div className="p-3 bg-yellow-50 rounded border border-yellow-200">
+                        <h5 className="font-medium text-yellow-800 mb-1">Grammar Note:</h5>
+                        <p className="text-sm text-yellow-700">{sentenceData.grammar_note}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-3">
+                <Button 
+                  variant="outline"
+                  onClick={fetchExampleSentence}
+                  disabled={loadingSentence}
+                  className="w-full h-12 text-lg font-semibold"
+                >
+                  {loadingSentence ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <BookOpen className="h-4 w-4 mr-2" />
+                      Show Example Sentence
+                    </>
+                  )}
+                </Button>
+
+                <Button 
+                  variant={isCorrect ? "success" : "default"}
+                  onClick={nextQuestion}
+                  className="w-full h-12 text-lg font-semibold"
+                >
+                  Next Word →
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>
