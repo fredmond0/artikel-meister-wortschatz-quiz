@@ -583,7 +583,7 @@ export function GameCard() {
                         variant="article"
                         className={`h-16 font-bold text-lg transition-all duration-200 ${
                           selectedArticle === article 
-                            ? 'ring-2 ring-german-gold shadow-lg scale-105 bg-german-gold/20' 
+                            ? 'ring-2 ring-blue-500 shadow-lg scale-105 bg-blue-600 text-white' 
                             : 'hover:scale-102 hover:shadow-md'
                         }`}
                         onClick={() => handleArticleSelect(article)}

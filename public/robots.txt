@@ -1,8 +1,19 @@
+# ArtikelMeister - AI-Powered German Learning Platform
+# https://learngerman.allmydogseat.com
+
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /.netlify/
+
+# Specific bot permissions
 User-agent: Googlebot
 Allow: /
+Crawl-delay: 1
 
 User-agent: Bingbot
 Allow: /
+Crawl-delay: 1
 
 User-agent: Twitterbot
 Allow: /
@@ -10,5 +21,14 @@ Allow: /
 User-agent: facebookexternalhit
 Allow: /
 
-User-agent: *
+User-agent: LinkedInBot
 Allow: /
+
+User-agent: WhatsApp
+Allow: /
+
+# Sitemap location
+Sitemap: https://learngerman.allmydogseat.com/sitemap.xml
+
+# Host preference
+Host: learngerman.allmydogseat.com
