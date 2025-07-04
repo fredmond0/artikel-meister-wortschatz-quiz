@@ -132,7 +132,8 @@ Return ONLY the JSON array, no other text.`;
             temperature: 0.7,
             topK: 1,
             topP: 1,
-            maxOutputTokens: 4096,
+            maxOutputTokens: 6000,
+            candidateCount: 1,
           },
         }),
       }

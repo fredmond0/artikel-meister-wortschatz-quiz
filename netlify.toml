@@ -6,7 +6,10 @@
   directory = "netlify/functions"
   
 [functions."get-topic-vocabulary"]
-  timeout = 40
+  timeout = 60
+
+[functions."health-check"]
+  timeout = 10
 
 [dev]
   command = "npm run dev"

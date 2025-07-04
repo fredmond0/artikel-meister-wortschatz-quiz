@@ -23,6 +23,7 @@ import {
   ArrowLeft,
   BarChart3
 } from 'lucide-react';
+import { LoadingModal } from '@/components/ui/loading-modal';
 import { useNavigate } from 'react-router-dom';
 import { 
   loadCustomLists, 
@@ -55,6 +56,7 @@ export function CustomLists() {
     includeDefault: true
   });
   const [isGenerating, setIsGenerating] = useState(false);
+  const [loadingStage, setLoadingStage] = useState<'healthCheck' | 'generating' | 'processing' | 'success' | 'error'>('healthCheck');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   
@@ -79,6 +81,44 @@ export function CustomLists() {
     setSuccess(null);
   };
 
+  const getTimeoutForWordCount = (count: number) => {
+    if (count <= 25) return 35000;
+    if (count <= 50) return 50000;
+    return 65000; // For 51-100 words
+  };
+
+  const performHealthCheck = async () => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    try {
+      const response = await fetch('/.netlify/functions/health-check', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        const errorData = JSON.parse(errorText);
+        throw new Error(errorData.details || errorData.error || 'Health check failed');
+      }
+
+      const data = await response.json();
+      return data.status === 'healthy';
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error('Health check timed out. The AI service may be unavailable.');
+      }
+      throw error;
+    }
+  };
+
   const generateTopicVocabulary = async () => {
     if (!topic.trim()) {
       setError('Please enter a topic');
@@ -88,11 +128,21 @@ export function CustomLists() {
     setIsGenerating(true);
     setError(null);
     setSuccess(null);
+    setLoadingStage('healthCheck');
 
     try {
-      // Create timeout controller for 35 seconds (longer than function timeout)
+      // Step 1: Health Check
+      console.log('Performing health check...');
+      await performHealthCheck();
+      console.log('Health check passed');
+
+      // Step 2: Generate vocabulary
+      setLoadingStage('generating');
+      const timeout = getTimeoutForWordCount(wordCount);
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 35000);
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+      console.log(`Generating ${wordCount} words with ${timeout}ms timeout`);
 
       const response = await fetch('/.netlify/functions/get-topic-vocabulary', {
         method: 'POST',
@@ -123,6 +173,8 @@ export function CustomLists() {
         }
       }
 
+      // Step 3: Process results
+      setLoadingStage('processing');
       const responseText = await response.text();
       console.log('Response text:', responseText);
 
@@ -149,19 +201,39 @@ export function CustomLists() {
       };
 
       setPreviewList(previewListData);
+      setLoadingStage('success');
       setSuccess(`Generated ${data.count} words for "${data.topic}"`);
       
     } catch (error) {
       console.error('Error generating vocabulary:', error);
+      setLoadingStage('error');
+      
       if (error instanceof Error && error.name === 'AbortError') {
-        setError('Request timed out. The AI service is taking longer than expected. Please try a smaller word count (10-15 words) or try again later.');
+        if (loadingStage === 'healthCheck') {
+          setError('Health check timed out. The AI service may be unavailable. Please try again later.');
+        } else {
+          setError(`Request timed out after ${Math.round(getTimeoutForWordCount(wordCount) / 1000)} seconds. Try generating fewer words (≤${wordCount <= 25 ? '15' : wordCount <= 50 ? '25' : '50'}) or try again later.`);
+        }
       } else if (error instanceof Error && error.message.includes('Sandbox.Timedout')) {
-        setError('The AI service timed out. Try generating fewer words (10-15) or a simpler topic.');
+        setError('The AI service timed out. Try generating fewer words or a simpler topic.');
       } else {
         setError(error instanceof Error ? error.message : 'Failed to generate vocabulary. Please try again.');
       }
-    } finally {
+    }
+  };
+
+  const handleModalClose = () => {
+    if (loadingStage === 'success') {
       setIsGenerating(false);
+      setLoadingStage('healthCheck');
+    } else if (loadingStage === 'error') {
+      setIsGenerating(false);
+      setLoadingStage('healthCheck');
+    } else {
+      // Cancel ongoing request
+      setIsGenerating(false);
+      setLoadingStage('healthCheck');
+      setError('Request cancelled by user');
     }
   };
 
@@ -311,17 +383,8 @@ export function CustomLists() {
                   disabled={isGenerating || !topic.trim()}
                   className="w-full bg-blue-600 hover:bg-blue-700"
                 >
-                  {isGenerating ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Generating vocabulary... (this may take 20-30 seconds)
-                    </>
-                  ) : (
-                    <>
-                      <Brain className="h-4 w-4 mr-2" />
-                      Generate Vocabulary
-                    </>
-                  )}
+                  <Brain className="h-4 w-4 mr-2" />
+                  Generate Vocabulary
                 </Button>
               </CardContent>
             </Card>
@@ -496,6 +559,15 @@ export function CustomLists() {
 
 
         </Tabs>
+
+        {/* Loading Modal */}
+        <LoadingModal
+          isOpen={isGenerating}
+          stage={loadingStage}
+          wordCount={wordCount}
+          onCancel={handleModalClose}
+          error={error}
+        />
       </div>
     </div>
   );
