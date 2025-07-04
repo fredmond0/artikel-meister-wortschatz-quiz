@@ -5,15 +5,18 @@ import { Badge } from '@/components/ui/badge';
 import { Progress as ProgressBar } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Slider } from '@/components/ui/slider';
+import { Switch } from '@/components/ui/switch';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { germanWords, type GermanWord } from '@/data/germanWords';
-import { Trophy, Target, BarChart3, Settings, Trash2, Download, Upload, BookOpen, Flame, ArrowLeft, ListChecks } from 'lucide-react';
+import { Trophy, Target, BarChart3, Settings, Trash2, Download, Upload, BookOpen, Flame, ArrowLeft, ListChecks, Shuffle, RefreshCw, Eye } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { 
   type WordProgress, 
   type ProgressSettings, 
   type CustomWord,
+  type GameStats,
   loadProgress, 
   loadSettings, 
   saveSettings, 
@@ -21,6 +24,10 @@ import {
   resetAllProgress,
   getConsolidatedWords,
   getActiveListsInfo,
+  loadGameStats,
+  getWordSelectionStats,
+  resetMasteredWords,
+  resetAllWordHistory,
   STORAGE_KEY,
   SETTINGS_KEY
 } from '@/lib/progressUtils';
@@ -28,19 +35,38 @@ import {
 export function Progress() {
   const navigate = useNavigate();
   const [wordProgress, setWordProgress] = useState<WordProgress>({});
-  const [settings, setSettings] = useState<ProgressSettings>({ masteryThreshold: 3 });
+  const [settings, setSettings] = useState<ProgressSettings>({ 
+    masteryThreshold: 3,
+    repetitionPreference: 50,
+    masteredWordsEnabled: false,
+    masteredWordsResetDays: 7
+  });
   const [masteredWords, setMasteredWords] = useState<Set<string>>(new Set());
   const [consolidatedWords, setConsolidatedWords] = useState<CustomWord[]>([]);
   const [activeListsInfo, setActiveListsInfo] = useState<{totalWords: number; activeListNames: string[]}>(
     { totalWords: 0, activeListNames: [] }
   );
+  const [gameStats, setGameStats] = useState<GameStats>({
+    totalQuestions: 0,
+    correctAnswers: 0,
+    currentStreak: 0,
+    bestStreak: 0,
+    articlesCorrect: 0,
+    articlesAttempted: 0,
+    translationsCorrect: 0,
+    translationsAttempted: 0,
+    startDate: Date.now(),
+    lastPlayed: Date.now()
+  });
 
   // Load progress and settings
   useEffect(() => {
     const savedProgress = loadProgress();
     const savedSettings = loadSettings();
+    const savedStats = loadGameStats();
     setWordProgress(savedProgress);
     setSettings(savedSettings);
+    setGameStats(savedStats);
     setMasteredWords(updateMasteredWords(savedProgress, savedSettings.masteryThreshold));
     
     // Load consolidated words
@@ -63,6 +89,8 @@ export function Progress() {
     resetAllProgress();
     setWordProgress({});
     setMasteredWords(new Set());
+    // Page will reload to reflect changes
+    window.location.reload();
   };
 
   const exportProgress = () => {
@@ -166,24 +194,14 @@ export function Progress() {
               <p className="text-gray-600">Track your German vocabulary mastery</p>
             </div>
           </div>
-          <div className="flex gap-2">
-            <Button 
-              onClick={() => navigate('/custom-lists')}
-              variant="outline"
-              className="flex items-center gap-2"
-            >
-              <ListChecks className="h-4 w-4" />
-              Custom Lists
-            </Button>
-            <Button 
-              onClick={() => navigate('/')}
-              variant="outline"
-              className="flex items-center gap-2"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to Quiz
-            </Button>
-          </div>
+          <Button 
+            onClick={() => navigate('/')}
+            variant="outline"
+            className="flex items-center gap-2"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Quiz
+          </Button>
         </div>
 
         {/* Active Lists Info */}
@@ -268,48 +286,165 @@ export function Progress() {
           </Card>
         </div>
 
-        <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="settings">Settings</TabsTrigger>
-            <TabsTrigger value="statistics">Statistics</TabsTrigger>
-            <TabsTrigger value="data">Data</TabsTrigger>
+        <Tabs defaultValue="statistics" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="statistics">Learning Statistics</TabsTrigger>
+            <TabsTrigger value="settings">Settings & Data</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="overview" className="space-y-4">
-            <Card className="border-gray-200 shadow-sm">
+          <TabsContent value="statistics" className="space-y-4">
+            {/* Game Performance Stats */}
+            <Card className="border-green-300 shadow-sm">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5" />
-                  Learning Overview
+                  <Target className="h-5 w-5 text-green-600" />
+                  Game Performance
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-6">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="text-center p-4 bg-green-50 rounded-lg border border-green-200">
+                    <div className="text-2xl font-bold text-green-600">{gameStats.totalQuestions}</div>
+                    <div className="text-sm text-gray-600">Total Questions</div>
+                  </div>
+                  <div className="text-center p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <div className="text-2xl font-bold text-blue-600">{gameStats.correctAnswers}</div>
+                    <div className="text-sm text-gray-600">Correct Answers</div>
+                  </div>
+                  <div className="text-center p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                    <div className="text-2xl font-bold text-yellow-600">{gameStats.bestStreak}</div>
+                    <div className="text-sm text-gray-600">Best Streak</div>
+                  </div>
+                  <div className="text-center p-4 bg-purple-50 rounded-lg border border-purple-200">
+                    <div className="text-2xl font-bold text-purple-600">
+                      {gameStats.totalQuestions > 0 ? Math.round((gameStats.correctAnswers / gameStats.totalQuestions) * 100) : 0}%
+                    </div>
+                    <div className="text-sm text-gray-600">Overall Accuracy</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Accuracy Breakdown */}
+            <Card className="border-blue-300 shadow-sm">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5 text-blue-600" />
+                  Accuracy Breakdown
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium">Article Accuracy</span>
+                      <span className="text-sm text-gray-600">
+                        {gameStats.articlesAttempted > 0 ? Math.round((gameStats.articlesCorrect / gameStats.articlesAttempted) * 100) : 0}%
+                      </span>
+                    </div>
+                    <ProgressBar 
+                      value={gameStats.articlesAttempted > 0 ? (gameStats.articlesCorrect / gameStats.articlesAttempted) * 100 : 0} 
+                      className="h-2" 
+                    />
+                    <div className="text-xs text-gray-500">
+                      {gameStats.articlesCorrect} correct out of {gameStats.articlesAttempted} attempts
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium">Translation Accuracy</span>
+                      <span className="text-sm text-gray-600">
+                        {gameStats.translationsAttempted > 0 ? Math.round((gameStats.translationsCorrect / gameStats.translationsAttempted) * 100) : 0}%
+                      </span>
+                    </div>
+                    <ProgressBar 
+                      value={gameStats.translationsAttempted > 0 ? (gameStats.translationsCorrect / gameStats.translationsAttempted) * 100 : 0} 
+                      className="h-2" 
+                    />
+                    <div className="text-xs text-gray-500">
+                      {gameStats.translationsCorrect} correct out of {gameStats.translationsAttempted} attempts
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Word Progress Stats */}
+            <Card className="border-gray-200 shadow-sm">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BookOpen className="h-5 w-5 text-gray-600" />
+                  Vocabulary Progress
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
                   <div>
                     <div className="flex justify-between text-sm text-gray-600 mb-2">
-                      <span>Overall Progress</span>
-                      <span>{completionPercentage}%</span>
+                      <span>Words Mastered</span>
+                      <span>{masteredCount} / {totalWords} ({completionPercentage}%)</span>
                     </div>
                     <ProgressBar value={completionPercentage} className="h-3" />
                   </div>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="text-center p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-                      <div className="text-2xl font-bold text-yellow-600">{streakInfo.daysStudied}</div>
-                      <div className="text-sm text-gray-600">Days Studied</div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="text-center p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                      <div className="text-xl font-bold text-yellow-600">{masteredCount}</div>
+                      <div className="text-xs text-gray-600">Mastered</div>
+                      {masteredCount > 0 && (
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="sm" className="mt-1 h-6 text-xs">
+                              <ListChecks className="h-3 w-3 mr-1" />
+                              View List
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent className="max-w-2xl max-h-[70vh] overflow-y-auto">
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Mastered Words ({masteredCount})</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                These are the words you've successfully mastered with {settings.masteryThreshold} or more correct answers.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 my-4">
+                              {wordsByCategory.mastered.map(({ word, progress }) => (
+                                <div key={word.german} className="flex items-center justify-between p-3 bg-green-50 rounded-lg border border-green-200">
+                                  <div className="flex-1">
+                                    <div className="font-medium text-green-800">
+                                      {word.article} {word.german}
+                                    </div>
+                                    <div className="text-sm text-green-600">{word.english}</div>
+                                  </div>
+                                  <div className="text-xs text-green-500">
+                                    {progress.correctCount}/{progress.totalSeen}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                            <AlertDialogFooter>
+                              <AlertDialogAction>Close</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      )}
                     </div>
-                    <div className="text-center p-4 bg-blue-50 rounded-lg border border-blue-200">
-                                          <div className="text-2xl font-bold text-blue-600">{streakInfo.totalQuestions}</div>
-                    <div className="text-sm text-gray-600">Total Questions</div>
+                    <div className="text-center p-3 bg-blue-50 rounded-lg border border-blue-200">
+                      <div className="text-xl font-bold text-blue-600">{wordsInProgress}</div>
+                      <div className="text-xs text-gray-600">In Progress</div>
+                    </div>
+                    <div className="text-center p-3 bg-gray-50 rounded-lg border border-gray-200">
+                      <div className="text-xl font-bold text-gray-600">{wordsNotStarted}</div>
+                      <div className="text-xs text-gray-600">Not Started</div>
                     </div>
                   </div>
 
                   {masteredCount > 0 && (
                     <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                      <h4 className="font-medium text-green-800 mb-2">🎉 Recent Achievements</h4>
+                      <h4 className="font-medium text-green-800 mb-2">🎉 Great Progress!</h4>
                       <p className="text-sm text-green-700">
-                        You've mastered {masteredCount} words! Keep up the great work!
+                        You've mastered {masteredCount} words and answered {gameStats.totalQuestions} questions! 
+                        {gameStats.bestStreak > 5 && ` Your best streak is ${gameStats.bestStreak} - amazing!`}
                       </p>
                     </div>
                   )}
@@ -319,6 +454,7 @@ export function Progress() {
           </TabsContent>
 
           <TabsContent value="settings" className="space-y-4">
+            {/* Learning Settings */}
             <Card className="border-gray-200 shadow-sm">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -349,55 +485,185 @@ export function Progress() {
                 </div>
 
                 <div className="pt-4 border-t">
+                  <h4 className="font-medium mb-4 flex items-center gap-2">
+                    <Shuffle className="h-4 w-4" />
+                    Smart Word Selection
+                  </h4>
+                  
+                  <div className="space-y-6">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-medium">Repetition Preference</label>
+                        <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                          {settings.repetitionPreference}%
+                        </span>
+                      </div>
+                      <Slider
+                        value={[settings.repetitionPreference]}
+                        onValueChange={(value) => handleSettingsChange({ ...settings, repetitionPreference: value[0] })}
+                        max={100}
+                        min={0}
+                        step={5}
+                        className="w-full"
+                      />
+                      <div className="flex justify-between text-xs text-gray-500">
+                        <span className="flex items-center gap-1">
+                          <Eye className="h-3 w-3" />
+                          Max Variety
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <RefreshCw className="h-3 w-3" />
+                          Max Repetition
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        {settings.repetitionPreference <= 20 ? "Focus on fresh words and maximum variety" :
+                         settings.repetitionPreference <= 40 ? "Balanced approach with some repetition" :
+                         settings.repetitionPreference <= 60 ? "Moderate repetition of recent words" :
+                         settings.repetitionPreference <= 80 ? "High repetition for reinforcement" :
+                         "Maximum repetition of recent and incorrect words"}
+                      </p>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-medium">Include Mastered Words</label>
+                        <Switch
+                          checked={settings.masteredWordsEnabled}
+                          onCheckedChange={(checked) => handleSettingsChange({ ...settings, masteredWordsEnabled: checked })}
+                        />
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        Allow mastered words to appear in quiz after a delay
+                      </p>
+                      
+                      {settings.masteredWordsEnabled && (
+                        <div className="pl-4 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <label className="text-sm font-medium">Reset After Days</label>
+                            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                              {settings.masteredWordsResetDays}
+                            </span>
+                          </div>
+                          <Slider
+                            value={[settings.masteredWordsResetDays]}
+                            onValueChange={(value) => handleSettingsChange({ ...settings, masteredWordsResetDays: value[0] })}
+                            max={30}
+                            min={1}
+                            step={1}
+                            className="w-full"
+                          />
+                          <div className="flex justify-between text-xs text-gray-500">
+                            <span>1 day</span>
+                            <span>30 days</span>
+                          </div>
+                          <p className="text-xs text-gray-500">
+                            Mastered words can reappear after {settings.masteredWordsResetDays} day{settings.masteredWordsResetDays !== 1 ? 's' : ''}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t">
                   <h4 className="font-medium mb-2">Current Settings</h4>
                   <div className="text-sm text-gray-600">
                     <p>• Mastery requires {settings.masteryThreshold} correct answers</p>
                     <p>• {masteredCount} words currently mastered</p>
                     <p>• {wordsInProgress} words in progress</p>
+                    <p>• Repetition preference: {settings.repetitionPreference}%</p>
+                    <p>• Mastered words: {settings.masteredWordsEnabled ? `included after ${settings.masteredWordsResetDays} days` : 'excluded'}</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
-          </TabsContent>
 
-          <TabsContent value="statistics" className="space-y-4">
-            <Card className="border-gray-200 shadow-sm">
+            {/* Word Selection Statistics */}
+            <Card className="border-indigo-200 shadow-sm">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5" />
-                  Learning Statistics
+                  <Shuffle className="h-5 w-5 text-indigo-600" />
+                  Word Selection Statistics
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-6">
-                  <div>
-                    <div className="flex justify-between text-sm text-gray-600 mb-2">
-                      <span>Overall Progress</span>
-                      <span>{completionPercentage}%</span>
-                    </div>
-                    <ProgressBar value={completionPercentage} className="h-3" />
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="text-center p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-                      <div className="text-2xl font-bold text-yellow-600">{masteredCount}</div>
-                      <div className="text-sm text-gray-600">Mastered Words</div>
-                    </div>
-                    <div className="text-center p-4 bg-blue-50 rounded-lg border border-blue-200">
-                      <div className="text-2xl font-bold text-blue-600">{wordsInProgress}</div>
-                      <div className="text-sm text-gray-600">In Progress</div>
-                    </div>
-                    <div className="text-center p-4 bg-gray-50 rounded-lg border border-gray-200">
-                      <div className="text-2xl font-bold text-gray-600">{wordsNotStarted}</div>
-                      <div className="text-sm text-gray-600">Not Started</div>
-                    </div>
-                  </div>
+                <div className="space-y-4">
+                  {(() => {
+                    const stats = getWordSelectionStats(consolidatedWords);
+                    const total = stats.incorrect + stats.recent + stats.fresh + stats.mastered + stats.never;
+                    
+                    return (
+                      <>
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                          <div className="text-center p-3 bg-red-50 rounded-lg border border-red-200">
+                            <div className="text-lg font-bold text-red-600">{stats.incorrect}</div>
+                            <div className="text-xs text-gray-600">Recently Incorrect</div>
+                          </div>
+                          <div className="text-center p-3 bg-orange-50 rounded-lg border border-orange-200">
+                            <div className="text-lg font-bold text-orange-600">{stats.recent}</div>
+                            <div className="text-xs text-gray-600">Recently Shown</div>
+                          </div>
+                          <div className="text-center p-3 bg-green-50 rounded-lg border border-green-200">
+                            <div className="text-lg font-bold text-green-600">{stats.fresh}</div>
+                            <div className="text-xs text-gray-600">Fresh Words</div>
+                          </div>
+                          <div className="text-center p-3 bg-purple-50 rounded-lg border border-purple-200">
+                            <div className="text-lg font-bold text-purple-600">{stats.mastered}</div>
+                            <div className="text-xs text-gray-600">Mastered</div>
+                          </div>
+                          <div className="text-center p-3 bg-gray-50 rounded-lg border border-gray-200">
+                            <div className="text-lg font-bold text-gray-600">{stats.never}</div>
+                            <div className="text-xs text-gray-600">Never Seen</div>
+                          </div>
+                        </div>
+
+                        <div className="text-sm text-gray-600 bg-blue-50 p-4 rounded-lg border border-blue-200">
+                          <h4 className="font-medium text-blue-800 mb-2">How Smart Selection Works</h4>
+                          <p className="text-blue-700 mb-2">
+                            The quiz intelligently chooses which words to show you based on your learning history and preferences. 
+                            At <strong>0% (Max Variety)</strong>, it focuses on showing you new words you haven't seen before to maximize exposure. 
+                            At <strong>100% (Max Repetition)</strong>, it prioritizes words you recently got wrong or need more practice with.
+                          </p>
+                          <p className="text-blue-600 text-xs">
+                            The algorithm balances between introducing fresh vocabulary and reinforcing challenging words to optimize your learning.
+                          </p>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2 pt-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              resetMasteredWords();
+                              window.location.reload();
+                            }}
+                            className="flex items-center gap-2"
+                          >
+                            <RefreshCw className="h-4 w-4" />
+                            Reset Mastered Words
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              resetAllWordHistory();
+                              window.location.reload();
+                            }}
+                            className="flex items-center gap-2"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Reset Word History
+                          </Button>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
               </CardContent>
             </Card>
-          </TabsContent>
 
-          <TabsContent value="data" className="space-y-4">
+            {/* Data Management */}
             <Card className="border-gray-200 shadow-sm">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">

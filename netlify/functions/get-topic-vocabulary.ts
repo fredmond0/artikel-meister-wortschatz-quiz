@@ -86,16 +86,24 @@ export const handler: Handler = async (event, context) => {
       };
     }
 
-    const prompt = `Create ${count} German words for "${topic}". Return ONLY valid JSON array:
+    const prompt = `Generate ${count} German vocabulary words related to "${topic}". Return ONLY a valid JSON array without any additional text.
 
-[{"german":"word","article":"der/die/das or empty","type":"noun/verb/adj","english":["translation"]}]
+Format: [{"german": "word", "article": "der/die/das or empty string", "type": "noun/verb/adjective", "english": ["translation"]}]
 
-Rules:
-- German word WITHOUT article 
-- Article separate: der/die/das for nouns, "" for others
-- Mix nouns/verbs/adjectives
-- One English translation per word
-- No extra text, just JSON`;
+Requirements:
+- Include a mix of nouns, verbs, and adjectives
+- For nouns: include the correct article (der/die/das)
+- For verbs and adjectives: leave article as empty string ""
+- German words should be base forms (infinitive for verbs, nominative singular for nouns)
+- English translations should be the most common/basic translation in an array with one element
+- Words should be appropriate for intermediate German learners
+- Avoid extremely obscure or technical terms unless specifically relevant to the topic
+- All words should be genuine German words with accurate translations
+- CRITICAL: The "german" field should contain ONLY the German word WITHOUT the article. The article goes in the separate "article" field.
+- CORRECT example: {"german": "Koch", "article": "der", "type": "noun", "english": ["cook"]}
+- WRONG example: {"german": "der Koch", "article": "der", "type": "noun", "english": ["cook"]}
+
+Return ONLY the JSON array, no other text.`;
 
     console.log('Calling Gemini API...');
     console.log('Prompt length:', prompt.length);

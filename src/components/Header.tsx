@@ -20,13 +20,11 @@ export function Header() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-1.5 bg-white/10 rounded-full">
-              <Brain className="h-6 w-6" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold tracking-wide">Artikel Meister</h1>
+              <h1 className="text-2xl font-bold tracking-wide">artikelmeister</h1>
               <div className="flex items-center gap-2">
-                <Globe className="h-3 w-3" />
-                <span className="text-xs font-medium">Deutsch Wortschatz Quiz</span>
+                <span className="text-xs font-small">allmydogseat</span>
               </div>
             </div>
             <div className="p-1.5 bg-white/10 rounded-full">

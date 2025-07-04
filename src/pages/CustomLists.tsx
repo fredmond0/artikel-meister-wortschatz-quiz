@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
+import { Slider } from '@/components/ui/slider';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
@@ -224,24 +225,14 @@ export function CustomLists() {
               <p className="text-gray-600">Create personalized vocabulary lists for any topic using AI</p>
             </div>
           </div>
-          <div className="flex gap-2">
-            <Button 
-              onClick={() => navigate('/progress')}
-              variant="outline"
-              className="flex items-center gap-2"
-            >
-              <BarChart3 className="h-4 w-4" />
-              Progress
-            </Button>
-            <Button 
-              onClick={() => navigate('/')}
-              variant="outline"
-              className="flex items-center gap-2"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to Quiz
-            </Button>
-          </div>
+          <Button 
+            onClick={() => navigate('/')}
+            variant="outline"
+            className="flex items-center gap-2"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Quiz
+          </Button>
         </div>
 
         {/* Status Messages */}
@@ -297,16 +288,20 @@ export function CustomLists() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Number of Words
+                        Number of Words: {wordCount}
                       </label>
-                      <Input
-                        type="number"
-                        value={wordCount}
-                        onChange={(e) => setWordCount(Math.max(10, Math.min(100, parseInt(e.target.value) || 25)))}
-                        min="10"
-                        max="100"
+                      <Slider
+                        value={[wordCount]}
+                        onValueChange={(value) => setWordCount(value[0])}
+                        max={100}
+                        min={10}
+                        step={5}
                         className="w-full"
                       />
+                      <div className="flex justify-between text-xs text-gray-500 mt-1">
+                        <span>10</span>
+                        <span>100</span>
+                      </div>
                     </div>
                   </div>
                 </div>

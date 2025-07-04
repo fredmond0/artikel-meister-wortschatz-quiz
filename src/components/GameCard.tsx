@@ -3,18 +3,23 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { germanWords, articles, type GermanWord } from '@/data/germanWords';
-import { CheckCircle, XCircle, Trophy, Zap, BookOpen, Loader2 } from 'lucide-react';
+import { CheckCircle, XCircle, Trophy, Zap, BookOpen, Loader2, ToggleLeft, ToggleRight } from 'lucide-react';
 import { 
   type WordProgress, 
   type ProgressSettings, 
   type CustomWord,
+  type GameStats,
   loadProgress, 
   loadSettings, 
   saveProgress, 
   updateMasteredWords, 
   updateWordProgress,
   getConsolidatedWords,
-  getActiveListsInfo
+  getActiveListsInfo,
+  loadGameStats,
+  updateGameStats,
+  selectSmartWord,
+  updateWordHistory
 } from '@/lib/progressUtils';
 
 interface GameState {
@@ -61,20 +66,42 @@ export function GameCard() {
   // Persistent Progress Features
   const [wordProgress, setWordProgress] = useState<WordProgress>({});
   const [masteredWords, setMasteredWords] = useState<Set<string>>(new Set());
-  const [settings, setSettings] = useState<ProgressSettings>({ masteryThreshold: 3 });
+  const [settings, setSettings] = useState<ProgressSettings>({ 
+    masteryThreshold: 3,
+    repetitionPreference: 50,
+    masteredWordsEnabled: false,
+    masteredWordsResetDays: 7
+  });
+  const [gameStats, setGameStats] = useState<GameStats>({
+    totalQuestions: 0,
+    correctAnswers: 0,
+    currentStreak: 0,
+    bestStreak: 0,
+    articlesCorrect: 0,
+    articlesAttempted: 0,
+    translationsCorrect: 0,
+    translationsAttempted: 0,
+    startDate: Date.now(),
+    lastPlayed: Date.now()
+  });
   
   // Welcome bubbles for first-time visitors
   const [showWelcomeBubbles, setShowWelcomeBubbles] = useState(false);
+  
+  // Article guessing toggle
+  const [guessArticle, setGuessArticle] = useState(true);
 
   // Generate new question
-  const generateQuestion = () => {
+  const generateQuestion = (forceReviewMode?: boolean) => {
     // Choose word source based on review mode
     let wordSource: CustomWord[];
     
-    if (isReviewMode && incorrectWords.length > 0) {
+    const effectiveReviewMode = forceReviewMode ?? isReviewMode;
+    
+    if (effectiveReviewMode && incorrectWords.length > 0) {
       wordSource = incorrectWords;
     } else {
-      // Filter out mastered words from normal mode
+      // Filter out mastered words from normal mode unless they're enabled in settings
       wordSource = consolidatedWords.filter(word => !masteredWords.has(word.german));
       
       // If all words are mastered, use all words (congratulations!)
@@ -88,27 +115,31 @@ export function GameCard() {
       wordSource = germanWords;
     }
     
-    const randomWord = wordSource[Math.floor(Math.random() * wordSource.length)];
-    setCurrentWord(randomWord);
+    // Use smart word selection in normal mode, random in review mode
+    const selectedWord = effectiveReviewMode 
+      ? wordSource[Math.floor(Math.random() * wordSource.length)]
+      : selectSmartWord(wordSource, settings) || wordSource[Math.floor(Math.random() * wordSource.length)];
+    
+    setCurrentWord(selectedWord);
     
     // Generate wrong choices for translation - filter by same word type for better difficulty
     const sameTypeWords = consolidatedWords.filter(w => 
-      w.german !== randomWord.german && w.type === randomWord.type
+      w.german !== selectedWord.german && w.type === selectedWord.type
     );
     
     // If we don't have enough words of the same type, fall back to all consolidated words
-    const fallbackWords = consolidatedWords.filter(w => w.german !== randomWord.german);
+    const fallbackWords = consolidatedWords.filter(w => w.german !== selectedWord.german);
     const sourceForChoices = sameTypeWords.length >= 3 ? sameTypeWords : fallbackWords;
     
     // If still not enough, fall back to default words
-    const finalSource = sourceForChoices.length >= 3 ? sourceForChoices : germanWords.filter(w => w.german !== randomWord.german);
+    const finalSource = sourceForChoices.length >= 3 ? sourceForChoices : germanWords.filter(w => w.german !== selectedWord.german);
     
     const wrongChoices = finalSource
       .map(w => w.english[0])
       .sort(() => Math.random() - 0.5)
       .slice(0, 3);
     
-    const allChoices = [randomWord.english[0], ...wrongChoices].sort(() => Math.random() - 0.5);
+    const allChoices = [selectedWord.english[0], ...wrongChoices].sort(() => Math.random() - 0.5);
     setChoices(allChoices);
     
     // Reset state
@@ -146,10 +177,13 @@ export function GameCard() {
       
       // Track word progress
       if (currentWord) {
-        const newProgress = updateWordProgress(wordProgress, currentWord.german, isTranslationCorrect);
+        const newProgress = updateWordProgress(wordProgress, currentWord.german, isTranslationCorrect, undefined, isTranslationCorrect);
         setWordProgress(newProgress);
         saveProgress(newProgress);
         setMasteredWords(updateMasteredWords(newProgress, settings.masteryThreshold));
+        
+        // Update word history for smart selection
+        updateWordHistory(currentWord.german, isTranslationCorrect, settings.masteryThreshold);
       }
       
       // Track incorrect words for review mode
@@ -175,50 +209,110 @@ export function GameCard() {
           correctAnswers: prev.correctAnswers + (isTranslationCorrect ? 1 : 0)
         };
       });
+      
+      // Update persistent game stats
+      const newStats = updateGameStats(isTranslationCorrect, gameState.streak + (isTranslationCorrect ? 1 : 0), undefined, isTranslationCorrect);
+      setGameStats(newStats);
       return;
     }
     
-    // For words with articles, check both article and translation
-    if (!article || !translation) return;
-    
-    const isArticleCorrect = article === currentWord?.article;
-    const isTranslationCorrect = translation === currentWord?.english[0];
-    const bothCorrect = isArticleCorrect && isTranslationCorrect;
-    
-    setIsCorrect(bothCorrect);
-    setShowResult(true);
-    
-    // Track word progress
-    if (currentWord) {
-      const newProgress = updateWordProgress(wordProgress, currentWord.german, bothCorrect);
-      setWordProgress(newProgress);
-      saveProgress(newProgress);
-      setMasteredWords(updateMasteredWords(newProgress, settings.masteryThreshold));
-    }
-    
-    // Track incorrect words for review mode
-    if (!bothCorrect && currentWord) {
-      setIncorrectWords(prev => {
-        const exists = prev.some(w => w.german === currentWord.german);
-        return exists ? prev : [...prev, currentWord];
-      });
-    } else if (bothCorrect && currentWord && isReviewMode) {
-      // Remove word from incorrect list when answered correctly in review mode
-      setIncorrectWords(prev => prev.filter(w => w.german !== currentWord.german));
-    }
-    
-    // Update game state
-    setGameState(prev => {
-      const newStreak = bothCorrect ? prev.streak + 1 : 0;
-      const points = bothCorrect ? (10 + newStreak * 2) : 0;
+    // For words with articles - check based on article guessing setting
+    if (guessArticle) {
+      // Traditional mode: check both article and translation
+      if (!article || !translation) return;
       
-      return {
-        score: prev.score + points,
-        streak: newStreak,
-        totalQuestions: prev.totalQuestions + 1,
-        correctAnswers: prev.correctAnswers + (bothCorrect ? 1 : 0)
-      };
-    });
+      const isArticleCorrect = article === currentWord?.article;
+      const isTranslationCorrect = translation === currentWord?.english[0];
+      const bothCorrect = isArticleCorrect && isTranslationCorrect;
+      
+      setIsCorrect(bothCorrect);
+      setShowResult(true);
+      
+      // Track word progress
+      if (currentWord) {
+        const newProgress = updateWordProgress(wordProgress, currentWord.german, bothCorrect, isArticleCorrect, isTranslationCorrect);
+        setWordProgress(newProgress);
+        saveProgress(newProgress);
+        setMasteredWords(updateMasteredWords(newProgress, settings.masteryThreshold));
+        
+        // Update word history for smart selection
+        updateWordHistory(currentWord.german, bothCorrect, settings.masteryThreshold);
+      }
+      
+      // Track incorrect words for review mode
+      if (!bothCorrect && currentWord) {
+        setIncorrectWords(prev => {
+          const exists = prev.some(w => w.german === currentWord.german);
+          return exists ? prev : [...prev, currentWord];
+        });
+      } else if (bothCorrect && currentWord && isReviewMode) {
+        // Remove word from incorrect list when answered correctly in review mode
+        setIncorrectWords(prev => prev.filter(w => w.german !== currentWord.german));
+      }
+      
+      // Update game state
+      setGameState(prev => {
+        const newStreak = bothCorrect ? prev.streak + 1 : 0;
+        const points = bothCorrect ? (10 + newStreak * 2) : 0;
+        
+        return {
+          score: prev.score + points,
+          streak: newStreak,
+          totalQuestions: prev.totalQuestions + 1,
+          correctAnswers: prev.correctAnswers + (bothCorrect ? 1 : 0)
+        };
+      });
+      
+      // Update persistent game stats
+      const newStats = updateGameStats(bothCorrect, gameState.streak + (bothCorrect ? 1 : 0), isArticleCorrect, isTranslationCorrect);
+      setGameStats(newStats);
+    } else {
+      // Article shown mode: only check translation
+      if (!translation) return;
+      
+      const isTranslationCorrect = translation === currentWord?.english[0];
+      setIsCorrect(isTranslationCorrect);
+      setShowResult(true);
+      
+      // Track word progress
+      if (currentWord) {
+        const newProgress = updateWordProgress(wordProgress, currentWord.german, isTranslationCorrect, undefined, isTranslationCorrect);
+        setWordProgress(newProgress);
+        saveProgress(newProgress);
+        setMasteredWords(updateMasteredWords(newProgress, settings.masteryThreshold));
+        
+        // Update word history for smart selection
+        updateWordHistory(currentWord.german, isTranslationCorrect, settings.masteryThreshold);
+      }
+      
+      // Track incorrect words for review mode
+      if (!isTranslationCorrect && currentWord) {
+        setIncorrectWords(prev => {
+          const exists = prev.some(w => w.german === currentWord.german);
+          return exists ? prev : [...prev, currentWord];
+        });
+      } else if (isTranslationCorrect && currentWord && isReviewMode) {
+        // Remove word from incorrect list when answered correctly in review mode
+        setIncorrectWords(prev => prev.filter(w => w.german !== currentWord.german));
+      }
+      
+      // Update game state
+      setGameState(prev => {
+        const newStreak = isTranslationCorrect ? prev.streak + 1 : 0;
+        const points = isTranslationCorrect ? (10 + newStreak * 2) : 0;
+        
+        return {
+          score: prev.score + points,
+          streak: newStreak,
+          totalQuestions: prev.totalQuestions + 1,
+          correctAnswers: prev.correctAnswers + (isTranslationCorrect ? 1 : 0)
+        };
+      });
+      
+      // Update persistent game stats
+      const newStats = updateGameStats(isTranslationCorrect, gameState.streak + (isTranslationCorrect ? 1 : 0), undefined, isTranslationCorrect);
+      setGameStats(newStats);
+    }
   };
 
   // Fetch example sentence from AI
@@ -265,7 +359,7 @@ export function GameCard() {
   const startReviewMode = () => {
     if (incorrectWords.length > 0) {
       setIsReviewMode(true);
-      generateQuestion();
+      generateQuestion(true); // Force review mode for immediate question generation
     }
   };
 
@@ -297,8 +391,10 @@ export function GameCard() {
   useEffect(() => {
     const savedProgress = loadProgress();
     const savedSettings = loadSettings();
+    const savedStats = loadGameStats();
     setWordProgress(savedProgress);
     setSettings(savedSettings);
+    setGameStats(savedStats);
     setMasteredWords(updateMasteredWords(savedProgress, savedSettings.masteryThreshold));
     
     // Load consolidated words from default + custom lists
@@ -374,9 +470,22 @@ export function GameCard() {
             {gameState.streak} streak
           </Badge>
         </div>
-        <div className="text-sm font-medium text-german-black">
-          {gameState.correctAnswers}/{gameState.totalQuestions}
-        </div>
+        <button 
+          onClick={() => setGuessArticle(!guessArticle)}
+          className="flex items-center gap-1 text-sm font-medium text-german-black hover:text-primary transition-colors"
+        >
+          {guessArticle ? (
+            <>
+              <ToggleRight className="h-4 w-4" />
+              <span>Article</span>
+            </>
+          ) : (
+            <>
+              <ToggleLeft className="h-4 w-4 opacity-50" />
+              <span className="opacity-50">Article</span>
+            </>
+          )}
+        </button>
       </div>
 
       {/* Progress & Review Mode Controls */}
@@ -463,8 +572,8 @@ export function GameCard() {
         <CardContent className="space-y-6">
           {!showResult && (
             <>
-              {/* Article Selection - Only show if word has an article */}
-              {currentWord.article && currentWord.article.trim() !== '' && (
+              {/* Article Selection - Only show if word has an article AND guessArticle is true */}
+              {currentWord.article && currentWord.article.trim() !== '' && guessArticle && (
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold text-center text-german-black">Wähle den Artikel:</h3>
                   <div className="grid grid-cols-3 gap-3">
@@ -489,9 +598,14 @@ export function GameCard() {
               {/* Word Display */}
               <div className="text-center p-6 bg-white/40 rounded-xl border border-german-gold/20">
                 <div className="text-4xl font-bold text-german-black mb-3 tracking-wide">
-                  {currentWord.article && currentWord.article.trim() !== '' && selectedArticle && (
+                  {currentWord.article && currentWord.article.trim() !== '' && guessArticle && selectedArticle && (
                     <span className={selectedArticle === currentWord.article ? 'text-success' : 'text-destructive'}>
                       {selectedArticle}{' '}
+                    </span>
+                  )}
+                  {currentWord.article && currentWord.article.trim() !== '' && !guessArticle && (
+                    <span className="text-german-black">
+                      {currentWord.article}{' '}
                     </span>
                   )}
                   <span className="text-german-red">{currentWord.german}</span>
@@ -562,7 +676,7 @@ export function GameCard() {
                   </div>
                 )}
                 
-                {currentWord.article && currentWord.article.trim() !== '' && selectedArticle !== currentWord.article && (
+                {currentWord.article && currentWord.article.trim() !== '' && guessArticle && selectedArticle !== currentWord.article && (
                   <div className="text-sm text-destructive">
                     You chose: {selectedArticle} (incorrect article)
                   </div>
