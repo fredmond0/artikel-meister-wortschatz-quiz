@@ -4,7 +4,18 @@
 
 [functions]
   directory = "netlify/functions"
-  timeout = 60
+
+# Timeout for the main vocabulary function
+[functions."get-topic-vocabulary"]
+  timeout = 90
+
+# Timeout for the health-check function
+[functions."health-check"]
+  timeout = 90
+
+# Added timeout for the sentence function
+[functions."get-sentence"]
+  timeout = 90
 
 [dev]
   command = "npm run dev"
