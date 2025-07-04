@@ -131,10 +131,15 @@ export function CustomLists() {
     setLoadingStage('healthCheck');
 
     try {
-      // Step 1: Health Check
+      // Step 1: Health Check (optional - continue if fails)
       console.log('Performing health check...');
-      await performHealthCheck();
-      console.log('Health check passed');
+      try {
+        await performHealthCheck();
+        console.log('Health check passed');
+      } catch (healthError) {
+        console.warn('Health check failed, continuing anyway:', healthError);
+        // Continue with vocabulary generation even if health check fails
+      }
 
       // Step 2: Generate vocabulary
       setLoadingStage('generating');
@@ -209,13 +214,13 @@ export function CustomLists() {
       setLoadingStage('error');
       
       if (error instanceof Error && error.name === 'AbortError') {
-        if (loadingStage === 'healthCheck') {
-          setError('Health check timed out. The AI service may be unavailable. Please try again later.');
-        } else {
-          setError(`Request timed out after ${Math.round(getTimeoutForWordCount(wordCount) / 1000)} seconds. Try generating fewer words (≤${wordCount <= 25 ? '15' : wordCount <= 50 ? '25' : '50'}) or try again later.`);
-        }
+        setError(`Request timed out after ${Math.round(getTimeoutForWordCount(wordCount) / 1000)} seconds. Try generating fewer words (≤${wordCount <= 25 ? '15' : wordCount <= 50 ? '25' : '50'}) or try again later.`);
       } else if (error instanceof Error && error.message.includes('Sandbox.Timedout')) {
         setError('The AI service timed out. Try generating fewer words or a simpler topic.');
+      } else if (error instanceof Error && error.message.includes('API key not configured')) {
+        setError('The AI service is not properly configured. Please contact support.');
+      } else if (error instanceof Error && error.message.includes('Service Unavailable')) {
+        setError('The AI service is temporarily unavailable. Please try again in a few minutes.');
       } else {
         setError(error instanceof Error ? error.message : 'Failed to generate vocabulary. Please try again.');
       }

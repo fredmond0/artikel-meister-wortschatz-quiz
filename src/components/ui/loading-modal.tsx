@@ -1,5 +1,5 @@
 import React from 'react';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Loader2, Wifi, Brain, CheckCircle, AlertCircle } from 'lucide-react';
 
@@ -18,6 +18,12 @@ export function LoadingModal({
   onCancel, 
   error 
 }: LoadingModalProps) {
+  const getEstimatedTime = () => {
+    if (wordCount <= 25) return '15-30 seconds';
+    if (wordCount <= 50) return '30-45 seconds';
+    return '45-60 seconds';
+  };
+
   const getStageInfo = () => {
     switch (stage) {
       case 'healthCheck':
@@ -65,17 +71,17 @@ export function LoadingModal({
     }
   };
 
-  const getEstimatedTime = () => {
-    if (wordCount <= 25) return '15-30 seconds';
-    if (wordCount <= 50) return '30-45 seconds';
-    return '45-60 seconds';
-  };
-
   const stageInfo = getStageInfo();
 
   return (
     <Dialog open={isOpen} onOpenChange={() => {}}>
       <DialogContent className="sm:max-w-md">
+        <DialogTitle className="sr-only">
+          {stageInfo.title}
+        </DialogTitle>
+        <DialogDescription className="sr-only">
+          {stageInfo.description}
+        </DialogDescription>
         <div className="flex flex-col items-center space-y-4 py-4">
           {/* Icon */}
           <div className="flex justify-center">

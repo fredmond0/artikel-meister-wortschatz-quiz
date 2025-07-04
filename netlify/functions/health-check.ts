@@ -26,9 +26,13 @@ export const handler: Handler = async (event, context) => {
   }
 
   try {
+    console.log('=== Health check function called ===');
     const apiKey = process.env.GEMINI_API_KEY;
+    console.log('API key present:', !!apiKey);
+    console.log('API key length:', apiKey?.length || 0);
     
     if (!apiKey) {
+      console.log('ERROR: No API key found!');
       return {
         statusCode: 500,
         headers,
@@ -64,27 +68,39 @@ export const handler: Handler = async (event, context) => {
       }
     );
 
+    console.log('Health check response status:', healthResponse.status);
+    console.log('Health check response ok:', healthResponse.ok);
+
     if (!healthResponse.ok) {
+      const errorText = await healthResponse.text();
+      console.error('Health check API error:', errorText);
       return {
         statusCode: 503,
         headers,
         body: JSON.stringify({ 
           error: 'AI service unavailable',
-          details: `Health check failed: ${healthResponse.status}`
+          details: `Health check failed: ${healthResponse.status}`,
+          apiResponse: errorText.substring(0, 200)
         }),
       };
     }
 
     const healthData = await healthResponse.json();
+    console.log('Health check response structure:', Object.keys(healthData));
+    console.log('Health check candidates length:', healthData.candidates?.length || 0);
+    
     const responseText = healthData.candidates?.[0]?.content?.parts?.[0]?.text;
+    console.log('Health check response text:', responseText);
 
     if (!responseText) {
+      console.error('Health check returned empty response');
       return {
         statusCode: 503,
         headers,
         body: JSON.stringify({ 
           error: 'AI service not responding correctly',
-          details: 'Health check returned empty response'
+          details: 'Health check returned empty response',
+          debugInfo: JSON.stringify(healthData, null, 2).substring(0, 300)
         }),
       };
     }
