@@ -4,6 +4,18 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { germanWords, articles, type GermanWord } from '@/data/germanWords';
 import { CheckCircle, XCircle, Trophy, Zap, BookOpen, Loader2 } from 'lucide-react';
+import { 
+  type WordProgress, 
+  type ProgressSettings, 
+  type CustomWord,
+  loadProgress, 
+  loadSettings, 
+  saveProgress, 
+  updateMasteredWords, 
+  updateWordProgress,
+  getConsolidatedWords,
+  getActiveListsInfo
+} from '@/lib/progressUtils';
 
 interface GameState {
   score: number;
@@ -19,16 +31,8 @@ interface SentenceData {
   grammar_note?: string;
 }
 
-interface WordProgress {
-  [german: string]: {
-    correctCount: number;
-    totalSeen: number;
-    lastSeen: number; // timestamp
-  };
-}
-
 export function GameCard() {
-  const [currentWord, setCurrentWord] = useState<GermanWord | null>(null);
+  const [currentWord, setCurrentWord] = useState<CustomWord | null>(null);
   const [selectedArticle, setSelectedArticle] = useState<string | null>(null);
   const [choices, setChoices] = useState<string[]>([]);
   const [selectedChoice, setSelectedChoice] = useState<string | null>(null);
@@ -44,84 +48,62 @@ export function GameCard() {
   const [loadingSentence, setLoadingSentence] = useState(false);
   const [sentenceError, setSentenceError] = useState<string | null>(null);
   
+  // Word sources and custom lists
+  const [consolidatedWords, setConsolidatedWords] = useState<CustomWord[]>([]);
+  const [activeListsInfo, setActiveListsInfo] = useState<{totalWords: number; activeListNames: string[]}>(
+    { totalWords: 0, activeListNames: [] }
+  );
+  
   // Review Mode Features
-  const [incorrectWords, setIncorrectWords] = useState<GermanWord[]>([]);
+  const [incorrectWords, setIncorrectWords] = useState<CustomWord[]>([]);
   const [isReviewMode, setIsReviewMode] = useState(false);
   
   // Persistent Progress Features
   const [wordProgress, setWordProgress] = useState<WordProgress>({});
   const [masteredWords, setMasteredWords] = useState<Set<string>>(new Set());
+  const [settings, setSettings] = useState<ProgressSettings>({ masteryThreshold: 3 });
   
-  // Constants
-  const MASTERY_THRESHOLD = 3; // Number of correct answers needed to master a word
-  const STORAGE_KEY = 'artikel-meister-progress';
-  
-  // localStorage functions
-  const saveProgress = (progress: WordProgress) => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
-    } catch (error) {
-      console.error('Failed to save progress:', error);
-    }
-  };
-  
-  const loadProgress = (): WordProgress => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      return saved ? JSON.parse(saved) : {};
-    } catch (error) {
-      console.error('Failed to load progress:', error);
-      return {};
-    }
-  };
-  
-  const resetProgress = () => {
-    localStorage.removeItem(STORAGE_KEY);
-    setWordProgress({});
-    setMasteredWords(new Set());
-  };
-  
-  // Update mastered words set based on progress
-  const updateMasteredWords = (progress: WordProgress) => {
-    const mastered = new Set<string>();
-    Object.entries(progress).forEach(([word, data]) => {
-      if (data.correctCount >= MASTERY_THRESHOLD) {
-        mastered.add(word);
-      }
-    });
-    setMasteredWords(mastered);
-  };
+  // Welcome bubbles for first-time visitors
+  const [showWelcomeBubbles, setShowWelcomeBubbles] = useState(false);
 
   // Generate new question
   const generateQuestion = () => {
     // Choose word source based on review mode
-    let wordSource: GermanWord[];
+    let wordSource: CustomWord[];
     
     if (isReviewMode && incorrectWords.length > 0) {
       wordSource = incorrectWords;
     } else {
       // Filter out mastered words from normal mode
-      wordSource = germanWords.filter(word => !masteredWords.has(word.german));
+      wordSource = consolidatedWords.filter(word => !masteredWords.has(word.german));
       
       // If all words are mastered, use all words (congratulations!)
       if (wordSource.length === 0) {
-        wordSource = germanWords;
+        wordSource = consolidatedWords;
       }
+    }
+    
+    // If no words available, fall back to default words
+    if (wordSource.length === 0) {
+      wordSource = germanWords;
     }
     
     const randomWord = wordSource[Math.floor(Math.random() * wordSource.length)];
     setCurrentWord(randomWord);
     
     // Generate wrong choices for translation - filter by same word type for better difficulty
-    const sameTypeWords = germanWords.filter(w => 
+    const sameTypeWords = consolidatedWords.filter(w => 
       w.german !== randomWord.german && w.type === randomWord.type
     );
     
-    // If we don't have enough words of the same type, fall back to all words
-    const fallbackWords = germanWords.filter(w => w.german !== randomWord.german);
+    // If we don't have enough words of the same type, fall back to all consolidated words
+    const fallbackWords = consolidatedWords.filter(w => w.german !== randomWord.german);
     const sourceForChoices = sameTypeWords.length >= 3 ? sameTypeWords : fallbackWords;
     
-    const wrongChoices = sourceForChoices
+    // If still not enough, fall back to default words
+    const finalSource = sourceForChoices.length >= 3 ? sourceForChoices : germanWords.filter(w => w.german !== randomWord.german);
+    
+    const wrongChoices = finalSource
       .map(w => w.english[0])
       .sort(() => Math.random() - 0.5)
       .slice(0, 3);
@@ -164,23 +146,10 @@ export function GameCard() {
       
       // Track word progress
       if (currentWord) {
-        const newProgress = { ...wordProgress };
-        const wordKey = currentWord.german;
-        
-        if (!newProgress[wordKey]) {
-          newProgress[wordKey] = { correctCount: 0, totalSeen: 0, lastSeen: Date.now() };
-        }
-        
-        newProgress[wordKey].totalSeen += 1;
-        newProgress[wordKey].lastSeen = Date.now();
-        
-        if (isTranslationCorrect) {
-          newProgress[wordKey].correctCount += 1;
-        }
-        
+        const newProgress = updateWordProgress(wordProgress, currentWord.german, isTranslationCorrect);
         setWordProgress(newProgress);
         saveProgress(newProgress);
-        updateMasteredWords(newProgress);
+        setMasteredWords(updateMasteredWords(newProgress, settings.masteryThreshold));
       }
       
       // Track incorrect words for review mode
@@ -221,23 +190,10 @@ export function GameCard() {
     
     // Track word progress
     if (currentWord) {
-      const newProgress = { ...wordProgress };
-      const wordKey = currentWord.german;
-      
-      if (!newProgress[wordKey]) {
-        newProgress[wordKey] = { correctCount: 0, totalSeen: 0, lastSeen: Date.now() };
-      }
-      
-      newProgress[wordKey].totalSeen += 1;
-      newProgress[wordKey].lastSeen = Date.now();
-      
-      if (bothCorrect) {
-        newProgress[wordKey].correctCount += 1;
-      }
-      
+      const newProgress = updateWordProgress(wordProgress, currentWord.german, bothCorrect);
       setWordProgress(newProgress);
       saveProgress(newProgress);
-      updateMasteredWords(newProgress);
+      setMasteredWords(updateMasteredWords(newProgress, settings.masteryThreshold));
     }
     
     // Track incorrect words for review mode
@@ -324,19 +280,55 @@ export function GameCard() {
     setIncorrectWords([]);
   };
 
+  // Reload consolidated words (useful when custom lists change)
+  const reloadConsolidatedWords = () => {
+    const defaultWords = germanWords.map(word => ({ ...word }));
+    const consolidated = getConsolidatedWords(defaultWords);
+    setConsolidatedWords(consolidated);
+    
+    const listsInfo = getActiveListsInfo(germanWords);
+    setActiveListsInfo(listsInfo);
+    
+    // Generate new question to refresh the game
+    generateQuestion();
+  };
+
   // Initialize progress and first question
   useEffect(() => {
     const savedProgress = loadProgress();
+    const savedSettings = loadSettings();
     setWordProgress(savedProgress);
-    updateMasteredWords(savedProgress);
-  }, []);
-  
-  // Initialize first question after progress is loaded
-  useEffect(() => {
-    if (Object.keys(wordProgress).length >= 0) { // Always true, but ensures progress is loaded
-      generateQuestion();
+    setSettings(savedSettings);
+    setMasteredWords(updateMasteredWords(savedProgress, savedSettings.masteryThreshold));
+    
+    // Load consolidated words from default + custom lists
+    const defaultWords = germanWords.map(word => ({ ...word }));
+    const consolidated = getConsolidatedWords(defaultWords);
+    setConsolidatedWords(consolidated);
+    
+    // Load active lists info
+    const listsInfo = getActiveListsInfo(germanWords);
+    setActiveListsInfo(listsInfo);
+    
+    // Check if this is the first visit of the session
+    const sessionKey = 'artikel-meister-session-welcome';
+    const hasSeenWelcome = sessionStorage.getItem(sessionKey);
+    
+    if (!hasSeenWelcome) {
+      setShowWelcomeBubbles(true);
+      sessionStorage.setItem(sessionKey, 'true');
+      
+      // Hide welcome bubbles after 4 seconds
+      setTimeout(() => {
+        setShowWelcomeBubbles(false);
+      }, 4000);
     }
-  }, [wordProgress, masteredWords]);
+    
+    // Generate first question after loading progress and words
+    setTimeout(() => {
+      generateQuestion();
+    }, 100);
+  }, []);
 
   // Auto-exit review mode when all words are mastered
   useEffect(() => {
@@ -346,6 +338,21 @@ export function GameCard() {
       }, 1000); // Small delay to let user see the completion
     }
   }, [isReviewMode, incorrectWords.length]);
+
+  // Reload consolidated words when window regains focus (in case user changed custom lists)
+  useEffect(() => {
+    const handleFocus = () => {
+      const defaultWords = germanWords.map(word => ({ ...word }));
+      const consolidated = getConsolidatedWords(defaultWords);
+      setConsolidatedWords(consolidated);
+      
+      const listsInfo = getActiveListsInfo(germanWords);
+      setActiveListsInfo(listsInfo);
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, []);
 
   if (!currentWord) return null;
 
@@ -374,24 +381,32 @@ export function GameCard() {
 
       {/* Progress & Review Mode Controls */}
       <div className="space-y-2">
-        {/* Progress Stats */}
-        <div className="flex justify-between items-center p-3 bg-german-gold/10 rounded-lg border border-german-gold/20">
-          <div className="flex items-center gap-2">
-            <div className="p-1 bg-german-gold/20 rounded">
-              <Trophy className="h-4 w-4 text-german-gold" />
+        {/* Welcome Bubbles (first session only) */}
+        {showWelcomeBubbles && (
+          <div className="space-y-2 animate-in fade-in-0 duration-500">
+            {/* Progress Stats Bubble */}
+            <div className="flex items-center justify-center p-3 bg-german-gold/10 rounded-lg border border-german-gold/20 animate-bounce">
+              <div className="flex items-center gap-2">
+                <div className="p-1 bg-german-gold/20 rounded">
+                  <Trophy className="h-4 w-4 text-german-gold" />
+                </div>
+                <span className="text-sm font-semibold text-german-black">
+                  {masteredWords.size} / {consolidatedWords.length > 0 ? consolidatedWords.length : germanWords.length} words mastered
+                </span>
+              </div>
             </div>
-            <span className="text-sm font-semibold text-german-black">
-              {masteredWords.size} / {germanWords.length} words mastered
-            </span>
+            
+            {/* Active Lists Info Bubble */}
+            {activeListsInfo.activeListNames.length > 0 && (
+              <div className="flex items-center justify-center p-2 bg-blue-50 rounded-lg border border-blue-200 animate-pulse">
+                <div className="text-xs text-blue-700 text-center">
+                  <div className="font-semibold">Active Lists:</div>
+                  <div>{activeListsInfo.activeListNames.join(', ')}</div>
+                </div>
+              </div>
+            )}
           </div>
-          <Button 
-            variant="outline" 
-            onClick={resetProgress}
-            className="text-xs h-7 px-3 text-german-red/70 hover:text-german-red"
-          >
-            Reset Progress
-          </Button>
-        </div>
+        )}
 
         {/* Review Mode Controls */}
         <div className="flex gap-2 justify-center">
@@ -512,7 +527,7 @@ export function GameCard() {
                   <>
                     <CheckCircle className="h-6 w-6 animate-bounce-in" />
                     {currentWord && masteredWords.has(currentWord.german) && 
-                     wordProgress[currentWord.german]?.correctCount === MASTERY_THRESHOLD ? (
+                     wordProgress[currentWord.german]?.correctCount === settings.masteryThreshold ? (
                       <span className="text-german-gold">🎉 Word Mastered!</span>
                     ) : (
                       'Perfect!'
@@ -540,7 +555,7 @@ export function GameCard() {
                 {/* Progress indicator */}
                 {currentWord && wordProgress[currentWord.german] && (
                   <div className="text-xs text-muted-foreground">
-                    Progress: {wordProgress[currentWord.german].correctCount}/{MASTERY_THRESHOLD} correct
+                    Progress: {wordProgress[currentWord.german].correctCount}/{settings.masteryThreshold} correct
                     {masteredWords.has(currentWord.german) && (
                       <span className="ml-2 text-german-gold">✨ Mastered!</span>
                     )}
