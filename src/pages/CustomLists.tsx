@@ -89,38 +89,6 @@ export function CustomLists() {
     return 50000; // Max is now 50 words
   };
 
-  const performHealthCheck = async () => {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-    try {
-      const response = await fetch('/.netlify/functions/health-check', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        const errorData = JSON.parse(errorText);
-        throw new Error(errorData.details || errorData.error || 'Health check failed');
-      }
-
-      const data = await response.json();
-      return data.status === 'healthy';
-    } catch (error) {
-      clearTimeout(timeoutId);
-      if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error('Health check timed out. The AI service may be unavailable.');
-      }
-      throw error;
-    }
-  };
-
   const generateTopicVocabulary = async () => {
     if (!topic.trim()) {
       setError('Please enter a topic');
@@ -130,16 +98,10 @@ export function CustomLists() {
     setIsGenerating(true);
     setError(null);
     setSuccess(null);
-    setLoadingStage('healthCheck');
+    setLoadingStage('generating');
 
     try {
-      // Step 1: Health Check
-      console.log('Performing health check...');
-      await performHealthCheck();
-      console.log('Health check passed');
-
-      // Step 2: Generate vocabulary
-      setLoadingStage('generating');
+      // Step 1: Generate vocabulary (Health check removed)
       const timeout = getTimeoutForWordCount(wordCount);
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeout);
@@ -222,11 +184,7 @@ export function CustomLists() {
       setLoadingStage('error');
       
       if (error instanceof Error && error.name === 'AbortError') {
-        if (loadingStage === 'healthCheck') {
-          setError('Health check timed out. The AI service may be unavailable. Please try again later.');
-        } else {
-          setError(`Request timed out after ${Math.round(getTimeoutForWordCount(wordCount) / 1000)} seconds. Try generating fewer words (≤${wordCount <= 25 ? '15' : '25'}) or try again later.`);
-        }
+        setError('The request took too long and timed out. Please try again with fewer words.');
       } else if (error instanceof Error && error.message.includes('Sandbox.Timedout')) {
         setError('The AI service timed out. Try generating fewer words or a simpler topic.');
       } else if (error instanceof Error && error.message.includes('API key not configured')) {
@@ -242,16 +200,13 @@ export function CustomLists() {
   };
 
   const handleModalClose = () => {
-    if (loadingStage === 'success') {
+    if (loadingStage === 'success' || loadingStage === 'error') {
       setIsGenerating(false);
-      setLoadingStage('healthCheck');
-    } else if (loadingStage === 'error') {
-      setIsGenerating(false);
-      setLoadingStage('healthCheck');
+      setLoadingStage('generating'); // Reset for next time
     } else {
       // Cancel ongoing request
       setIsGenerating(false);
-      setLoadingStage('healthCheck');
+      setLoadingStage('generating'); // Reset for next time
       setError('Request cancelled by user');
     }
   };

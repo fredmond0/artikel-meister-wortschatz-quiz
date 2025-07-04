@@ -18,12 +18,6 @@ export function LoadingModal({
   onCancel, 
   error 
 }: LoadingModalProps) {
-  const getEstimatedTime = () => {
-    if (wordCount <= 25) return '15-30 seconds';
-    if (wordCount <= 50) return '30-45 seconds';
-    return '45-60 seconds';
-  };
-
   const getStageInfo = () => {
     switch (stage) {
       case 'healthCheck':
@@ -109,14 +103,6 @@ export function LoadingModal({
           <p className="text-sm text-gray-600 text-center max-w-sm">
             {stageInfo.description}
           </p>
-
-          {/* Progress Info */}
-          {stageInfo.showProgress && stage === 'generating' && (
-            <div className="text-xs text-gray-500 text-center">
-              <p>Estimated time: {getEstimatedTime()}</p>
-              <p className="mt-1">Word count: {wordCount}</p>
-            </div>
-          )}
 
           {/* Loading Animation */}
           {stageInfo.showProgress && (
