@@ -19,6 +19,14 @@ interface SentenceData {
   grammar_note?: string;
 }
 
+interface WordProgress {
+  [german: string]: {
+    correctCount: number;
+    totalSeen: number;
+    lastSeen: number; // timestamp
+  };
+}
+
 export function GameCard() {
   const [currentWord, setCurrentWord] = useState<GermanWord | null>(null);
   const [selectedArticle, setSelectedArticle] = useState<string | null>(null);
@@ -39,11 +47,68 @@ export function GameCard() {
   // Review Mode Features
   const [incorrectWords, setIncorrectWords] = useState<GermanWord[]>([]);
   const [isReviewMode, setIsReviewMode] = useState(false);
+  
+  // Persistent Progress Features
+  const [wordProgress, setWordProgress] = useState<WordProgress>({});
+  const [masteredWords, setMasteredWords] = useState<Set<string>>(new Set());
+  
+  // Constants
+  const MASTERY_THRESHOLD = 3; // Number of correct answers needed to master a word
+  const STORAGE_KEY = 'artikel-meister-progress';
+  
+  // localStorage functions
+  const saveProgress = (progress: WordProgress) => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
+    } catch (error) {
+      console.error('Failed to save progress:', error);
+    }
+  };
+  
+  const loadProgress = (): WordProgress => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      return saved ? JSON.parse(saved) : {};
+    } catch (error) {
+      console.error('Failed to load progress:', error);
+      return {};
+    }
+  };
+  
+  const resetProgress = () => {
+    localStorage.removeItem(STORAGE_KEY);
+    setWordProgress({});
+    setMasteredWords(new Set());
+  };
+  
+  // Update mastered words set based on progress
+  const updateMasteredWords = (progress: WordProgress) => {
+    const mastered = new Set<string>();
+    Object.entries(progress).forEach(([word, data]) => {
+      if (data.correctCount >= MASTERY_THRESHOLD) {
+        mastered.add(word);
+      }
+    });
+    setMasteredWords(mastered);
+  };
 
   // Generate new question
   const generateQuestion = () => {
     // Choose word source based on review mode
-    const wordSource = isReviewMode && incorrectWords.length > 0 ? incorrectWords : germanWords;
+    let wordSource: GermanWord[];
+    
+    if (isReviewMode && incorrectWords.length > 0) {
+      wordSource = incorrectWords;
+    } else {
+      // Filter out mastered words from normal mode
+      wordSource = germanWords.filter(word => !masteredWords.has(word.german));
+      
+      // If all words are mastered, use all words (congratulations!)
+      if (wordSource.length === 0) {
+        wordSource = germanWords;
+      }
+    }
+    
     const randomWord = wordSource[Math.floor(Math.random() * wordSource.length)];
     setCurrentWord(randomWord);
     
@@ -97,6 +162,27 @@ export function GameCard() {
       setIsCorrect(isTranslationCorrect);
       setShowResult(true);
       
+      // Track word progress
+      if (currentWord) {
+        const newProgress = { ...wordProgress };
+        const wordKey = currentWord.german;
+        
+        if (!newProgress[wordKey]) {
+          newProgress[wordKey] = { correctCount: 0, totalSeen: 0, lastSeen: Date.now() };
+        }
+        
+        newProgress[wordKey].totalSeen += 1;
+        newProgress[wordKey].lastSeen = Date.now();
+        
+        if (isTranslationCorrect) {
+          newProgress[wordKey].correctCount += 1;
+        }
+        
+        setWordProgress(newProgress);
+        saveProgress(newProgress);
+        updateMasteredWords(newProgress);
+      }
+      
       // Track incorrect words for review mode
       if (!isTranslationCorrect && currentWord) {
         setIncorrectWords(prev => {
@@ -132,6 +218,27 @@ export function GameCard() {
     
     setIsCorrect(bothCorrect);
     setShowResult(true);
+    
+    // Track word progress
+    if (currentWord) {
+      const newProgress = { ...wordProgress };
+      const wordKey = currentWord.german;
+      
+      if (!newProgress[wordKey]) {
+        newProgress[wordKey] = { correctCount: 0, totalSeen: 0, lastSeen: Date.now() };
+      }
+      
+      newProgress[wordKey].totalSeen += 1;
+      newProgress[wordKey].lastSeen = Date.now();
+      
+      if (bothCorrect) {
+        newProgress[wordKey].correctCount += 1;
+      }
+      
+      setWordProgress(newProgress);
+      saveProgress(newProgress);
+      updateMasteredWords(newProgress);
+    }
     
     // Track incorrect words for review mode
     if (!bothCorrect && currentWord) {
@@ -217,10 +324,19 @@ export function GameCard() {
     setIncorrectWords([]);
   };
 
-  // Initialize first question
+  // Initialize progress and first question
   useEffect(() => {
-    generateQuestion();
+    const savedProgress = loadProgress();
+    setWordProgress(savedProgress);
+    updateMasteredWords(savedProgress);
   }, []);
+  
+  // Initialize first question after progress is loaded
+  useEffect(() => {
+    if (Object.keys(wordProgress).length >= 0) { // Always true, but ensures progress is loaded
+      generateQuestion();
+    }
+  }, [wordProgress, masteredWords]);
 
   // Auto-exit review mode when all words are mastered
   useEffect(() => {
@@ -256,42 +372,64 @@ export function GameCard() {
         </div>
       </div>
 
-      {/* Review Mode Controls */}
-      <div className="flex gap-2 justify-center">
-        {!isReviewMode && incorrectWords.length > 0 && (
+      {/* Progress & Review Mode Controls */}
+      <div className="space-y-2">
+        {/* Progress Stats */}
+        <div className="flex justify-between items-center p-3 bg-german-gold/10 rounded-lg border border-german-gold/20">
+          <div className="flex items-center gap-2">
+            <div className="p-1 bg-german-gold/20 rounded">
+              <Trophy className="h-4 w-4 text-german-gold" />
+            </div>
+            <span className="text-sm font-semibold text-german-black">
+              {masteredWords.size} / {germanWords.length} words mastered
+            </span>
+          </div>
           <Button 
             variant="outline" 
-            onClick={startReviewMode}
-            className="flex items-center gap-2 bg-german-red/10 border-german-red/30 hover:bg-german-red/20 text-german-red font-semibold"
+            onClick={resetProgress}
+            className="text-xs h-7 px-3 text-german-red/70 hover:text-german-red"
           >
-            <BookOpen className="h-4 w-4" />
-            Review ({incorrectWords.length} words)
+            Reset Progress
           </Button>
-        )}
-        
-        {isReviewMode && (
-          <div className="flex gap-2">
-            <Badge variant="destructive" className="px-3 py-1 bg-german-red">
-              Review Mode: {incorrectWords.length} words remaining
-            </Badge>
+        </div>
+
+        {/* Review Mode Controls */}
+        <div className="flex gap-2 justify-center">
+          {!isReviewMode && incorrectWords.length > 0 && (
             <Button 
               variant="outline" 
-              onClick={exitReviewMode}
-              className="text-sm h-8 px-3"
+              onClick={startReviewMode}
+              className="flex items-center gap-2 bg-german-red/10 border-german-red/30 hover:bg-german-red/20 text-german-red font-semibold"
             >
-              Exit Review
+              <BookOpen className="h-4 w-4" />
+              Review ({incorrectWords.length} words)
             </Button>
-            {incorrectWords.length === 0 && (
+          )}
+          
+          {isReviewMode && (
+            <div className="flex gap-2">
+              <Badge variant="destructive" className="px-3 py-1 bg-german-red">
+                Review Mode: {incorrectWords.length} words remaining
+              </Badge>
               <Button 
                 variant="outline" 
-                onClick={clearIncorrectWords}
+                onClick={exitReviewMode}
                 className="text-sm h-8 px-3"
               >
-                Clear All
+                Exit Review
               </Button>
-            )}
-          </div>
-        )}
+              {incorrectWords.length === 0 && (
+                <Button 
+                  variant="outline" 
+                  onClick={clearIncorrectWords}
+                  className="text-sm h-8 px-3"
+                >
+                  Clear All
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Main Game Card */}
@@ -373,7 +511,12 @@ export function GameCard() {
                 {isCorrect ? (
                   <>
                     <CheckCircle className="h-6 w-6 animate-bounce-in" />
-                    Perfect!
+                    {currentWord && masteredWords.has(currentWord.german) && 
+                     wordProgress[currentWord.german]?.correctCount === MASTERY_THRESHOLD ? (
+                      <span className="text-german-gold">🎉 Word Mastered!</span>
+                    ) : (
+                      'Perfect!'
+                    )}
                   </>
                 ) : (
                   <>
@@ -393,6 +536,17 @@ export function GameCard() {
                 <div className="text-muted-foreground">
                   means: <span className="font-medium">{currentWord.english.join(', ')}</span>
                 </div>
+                
+                {/* Progress indicator */}
+                {currentWord && wordProgress[currentWord.german] && (
+                  <div className="text-xs text-muted-foreground">
+                    Progress: {wordProgress[currentWord.german].correctCount}/{MASTERY_THRESHOLD} correct
+                    {masteredWords.has(currentWord.german) && (
+                      <span className="ml-2 text-german-gold">✨ Mastered!</span>
+                    )}
+                  </div>
+                )}
+                
                 {currentWord.article && currentWord.article.trim() !== '' && selectedArticle !== currentWord.article && (
                   <div className="text-sm text-destructive">
                     You chose: {selectedArticle} (incorrect article)
