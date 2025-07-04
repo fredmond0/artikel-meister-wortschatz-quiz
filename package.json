@@ -5,7 +5,14 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "keywords": ["german", "language-learning", "vocabulary", "articles", "ai", "education"],
+  "keywords": [
+    "german",
+    "language-learning",
+    "vocabulary",
+    "articles",
+    "ai",
+    "education"
+  ],
   "homepage": "https://learngerman.allmydogseat.com",
   "repository": {
     "type": "git",
@@ -19,6 +26,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@hookform/resolvers": "^3.9.0",
     "@radix-ui/react-accordion": "^1.2.0",
     "@radix-ui/react-alert-dialog": "^1.1.1",

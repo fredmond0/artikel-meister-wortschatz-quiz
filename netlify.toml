@@ -9,10 +9,6 @@
 [functions."get-topic-vocabulary"]
   timeout = 90
 
-# Timeout for the health-check function
-[functions."health-check"]
-  timeout = 90
-
 # Added timeout for the sentence function
 [functions."get-sentence"]
   timeout = 90

@@ -570,58 +570,43 @@ export const getWordSelectionStats = (availableWords: CustomWord[]): {
   never: number;
 } => {
   const history = loadWordHistory();
-  const now = Date.now();
-  const oneDay = 24 * 60 * 60 * 1000;
-  const oneHour = 60 * 60 * 1000;
-  
-  const stats = {
-    incorrect: 0,
-    recent: 0,
-    fresh: 0,
-    mastered: 0,
-    never: 0
-  };
-  
+  const settings = loadSettings();
+  let incorrect = 0, recent = 0, fresh = 0, mastered = 0, never = 0;
+
   availableWords.forEach(word => {
     const wordHistory = history[word.german];
-    
     if (!wordHistory) {
-      // Track never seen separately for display
-      stats.never++;
-      return;
+      never++;
+    } else if (wordHistory.isMastered) {
+      mastered++;
+    } else if (wordHistory.recentlyIncorrect) {
+      incorrect++;
+    } else if (wordHistory.timesShown > 0 && Date.now() - wordHistory.lastShown < 3 * 24 * 60 * 60 * 1000) {
+      recent++;
+    } else {
+      fresh++;
     }
-    
-    if (wordHistory.isMastered) {
-      stats.mastered++;
-      return;
-    }
-    
-    if (wordHistory.recentlyIncorrect && (now - wordHistory.lastIncorrectTime) < oneDay) {
-      stats.incorrect++;
-      return;
-    }
-    
-    if ((now - wordHistory.lastShown) < oneHour) {
-      stats.recent++;
-      return;
-    }
-    
-    // Words not seen recently (but have history)
-    stats.fresh++;
   });
-  
-  return stats;
+
+  return { incorrect, recent, fresh, mastered, never };
 };
 
-export const resetMasteredWords = () => {
-  const history = loadWordHistory();
-  Object.keys(history).forEach(word => {
-    history[word].isMastered = false;
-    history[word].consecutiveCorrect = 0;
+export const resetMasteredWords = (
+  currentProgress: WordProgress,
+  masteryThreshold: number
+): WordProgress => {
+  const newProgress = { ...currentProgress };
+  Object.keys(newProgress).forEach(word => {
+    if (newProgress[word].correctCount >= masteryThreshold) {
+      newProgress[word].correctCount = 0; 
+    }
   });
-  saveWordHistory(history);
+  saveProgress(newProgress);
+  return newProgress;
 };
 
 export const resetAllWordHistory = () => {
+  localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(GAME_STATS_KEY);
   localStorage.removeItem(WORD_HISTORY_KEY);
 }; 
