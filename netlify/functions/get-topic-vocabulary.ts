@@ -17,6 +17,140 @@ interface TopicVocabularyResponse {
   words: CustomWord[];
   difficulty: string;
   count: number;
+  warning?: string;
+  finishReason?: string;
+}
+
+interface PartialRecoveryResult {
+  success: boolean;
+  words: CustomWord[];
+  error?: string;
+}
+
+// Function to attempt partial recovery from incomplete JSON
+function attemptPartialRecovery(jsonString: string, finishReason?: string): PartialRecoveryResult {
+  try {
+    console.log('Attempting partial recovery from incomplete JSON...');
+    console.log('JSON string length:', jsonString.length);
+    console.log('Finish reason:', finishReason);
+    
+    // Remove the outer ```json and ``` if present
+    let cleanJson = jsonString.replace(/^```json\s*/, '').replace(/```\s*$/, '');
+    
+    // Strategy: Find the last properly closed object by looking for complete patterns
+    // We'll search backwards from the end to find the last complete "}" that closes an object
+    
+    // Split by lines to analyze the structure
+    const lines = cleanJson.split('\n');
+    let braceDepth = 0;
+    let inString = false;
+    let lastCompleteObjectIndex = -1;
+    
+    // Parse through the JSON to find structure
+    for (let i = 0; i < cleanJson.length; i++) {
+      const char = cleanJson[i];
+      const prevChar = i > 0 ? cleanJson[i - 1] : '';
+      
+      if (char === '"' && prevChar !== '\\') {
+        inString = !inString;
+      } else if (!inString) {
+        if (char === '{') {
+          braceDepth++;
+        } else if (char === '}') {
+          braceDepth--;
+          // If we're back to depth 1, we just closed a complete object
+          if (braceDepth === 1) {
+            lastCompleteObjectIndex = i;
+          }
+        }
+      }
+    }
+    
+    console.log('Brace depth analysis complete. Last complete object index:', lastCompleteObjectIndex);
+    console.log('Final brace depth:', braceDepth);
+    
+    if (lastCompleteObjectIndex === -1) {
+      console.log('Primary parsing failed, trying fallback patterns...');
+      // Fallback: look for the last occurrence of complete object patterns
+      const patterns = [
+        /}\s*,\s*{/g,  // }, {
+        /}\s*\]/g,     // }]
+        /}\s*,\s*$/g   // }, at end
+      ];
+      
+      for (const pattern of patterns) {
+        let match: RegExpExecArray | null;
+        let lastMatch: RegExpExecArray | null = null;
+        while ((match = pattern.exec(cleanJson)) !== null) {
+          lastMatch = match;
+        }
+        if (lastMatch) {
+          lastCompleteObjectIndex = lastMatch.index + lastMatch[0].length - 1;
+          console.log('Fallback pattern found match at index:', lastCompleteObjectIndex);
+          break;
+        }
+      }
+    }
+    
+    if (lastCompleteObjectIndex === -1) {
+      console.log('No complete object structure found');
+      console.log('JSON preview (first 200 chars):', cleanJson.substring(0, 200));
+      console.log('JSON preview (last 200 chars):', cleanJson.substring(cleanJson.length - 200));
+      return {
+        success: false,
+        words: [],
+        error: 'No complete word objects found in JSON'
+      };
+    }
+    
+    // Extract up to the last complete object
+    let truncatedJson = cleanJson.substring(0, lastCompleteObjectIndex + 1);
+    
+    // Make sure we close the array properly
+    if (!truncatedJson.endsWith(']')) {
+      truncatedJson += ']';
+    }
+    
+    console.log('Truncated JSON length:', truncatedJson.length);
+    console.log('Truncated JSON ending:', truncatedJson.substring(truncatedJson.length - 100));
+    console.log('About to attempt JSON.parse on truncated content...');
+    
+    // Try to parse the truncated JSON
+    const parsedWords = JSON.parse(truncatedJson);
+    
+    if (!Array.isArray(parsedWords)) {
+      return {
+        success: false,
+        words: [],
+        error: 'Recovered data is not an array'
+      };
+    }
+    
+    // Validate the recovered words
+    const validWords = parsedWords.filter((word, index) => {
+      const isValid = word.german && word.type && Array.isArray(word.english) && word.english.length > 0;
+      if (!isValid) {
+        console.log(`Filtering out invalid word at index ${index}:`, word);
+      }
+      return isValid;
+    });
+    
+    console.log(`Partial recovery found ${validWords.length} valid words out of ${parsedWords.length} total`);
+    
+    return {
+      success: true,
+      words: validWords,
+      error: undefined
+    };
+    
+  } catch (error) {
+    console.error('Partial recovery failed:', error);
+    return {
+      success: false,
+      words: [],
+      error: error instanceof Error ? error.message : 'Unknown error during partial recovery'
+    };
+  }
 }
 
 export const handler: Handler = async (event, context) => {
@@ -50,10 +184,20 @@ export const handler: Handler = async (event, context) => {
     console.log('Body received:', event.body);
     
     const body: RequestBody = JSON.parse(event.body || '{}');
-    console.log('Parsed request body:', JSON.stringify(body, null, 2));
+    const topic = body.topic?.trim();
+    let count = body.count || 15;
     
-    const { topic, count = 15 } = body;
+    // Safety check: cap at 50 words to prevent token limit issues
+    if (count > 50) {
+      console.log(`Capping word count from ${count} to 50 to prevent token limit issues`);
+      count = 50;
+    }
 
+    console.log('Parsed request body:', {
+      topic,
+      count
+    });
+    
     if (!topic || topic.trim().length === 0) {
       console.log('ERROR: Missing required field: topic');
       return {
@@ -86,24 +230,20 @@ export const handler: Handler = async (event, context) => {
       };
     }
 
-    const prompt = `Generate ${count} German vocabulary words related to "${topic}". Return ONLY a valid JSON array without any additional text.
+    const prompt = `Generate ${count} German vocabulary words for "${topic}". Return ONLY a JSON array.
 
-Format: [{"german": "word", "article": "der/die/das or empty string", "type": "noun/verb/adjective", "english": ["translation"]}]
+Format: [{"german": "word", "article": "der/die/das or ''", "type": "noun/verb/adjective", "english": ["translation"]}]
 
-Requirements:
-- Include a mix of nouns, verbs, and adjectives
-- For nouns: include the correct article (der/die/das)
-- For verbs and adjectives: leave article as empty string ""
-- German words should be base forms (infinitive for verbs, nominative singular for nouns)
-- English translations should be the most common/basic translation in an array with one element
-- Words should be appropriate for intermediate German learners
-- Avoid extremely obscure or technical terms unless specifically relevant to the topic
-- All words should be genuine German words with accurate translations
-- CRITICAL: The "german" field should contain ONLY the German word WITHOUT the article. The article goes in the separate "article" field.
-- CORRECT example: {"german": "Koch", "article": "der", "type": "noun", "english": ["cook"]}
-- WRONG example: {"german": "der Koch", "article": "der", "type": "noun", "english": ["cook"]}
+Rules:
+- Mix of nouns, verbs, adjectives
+- Nouns: include article (der/die/das), verbs/adjectives: article = ""
+- Base forms only (infinitive verbs, nominative singular nouns)
+- Common/basic translations in array
+- Intermediate difficulty, no extreme obscure terms
+- CRITICAL: "german" field = word only, article in separate "article" field
+- Example: {"german": "Koch", "article": "der", "type": "noun", "english": ["cook"]}
 
-Return ONLY the JSON array, no other text.`;
+Return ONLY the JSON array.`;
 
     console.log('Calling Gemini API...');
     console.log('Prompt length:', prompt.length);
@@ -132,7 +272,7 @@ Return ONLY the JSON array, no other text.`;
             temperature: 0.7,
             topK: 1,
             topP: 1,
-            maxOutputTokens: 6000,
+            maxOutputTokens: 8000,
             candidateCount: 1,
           },
         }),
@@ -161,24 +301,32 @@ Return ONLY the JSON array, no other text.`;
     console.log('Gemini response structure:', Object.keys(geminiData));
     console.log('Gemini candidates length:', geminiData.candidates?.length || 0);
     
+    // Examine finish_reason to understand why generation stopped
+    const finishReason = geminiData.candidates?.[0]?.finishReason;
+    console.log('Finish reason:', finishReason);
+    
     const generatedText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
     console.log('Generated text length:', generatedText?.length || 0);
     console.log('Generated text preview:', generatedText?.substring(0, 200) + '...');
 
     if (!generatedText) {
       console.error('No generated text from Gemini');
+      console.error('Finish reason was:', finishReason);
       return {
         statusCode: 500,
         headers,
         body: JSON.stringify({ 
           error: 'No response content from AI service',
-          details: 'The AI service returned an empty response'
+          details: `The AI service returned an empty response. Finish reason: ${finishReason || 'unknown'}`,
+          finishReason: finishReason
         }),
       };
     }
 
     // Parse the JSON response from Gemini
     let parsedWords: CustomWord[];
+    let isPartialResult = false;
+    
     try {
       console.log('Attempting to parse JSON from AI response...');
       
@@ -187,20 +335,39 @@ Return ONLY the JSON array, no other text.`;
       if (!jsonMatch) {
         console.error('No JSON array found in response');
         console.error('Full response text:', generatedText);
+        console.error('Finish reason was:', finishReason);
         return {
           statusCode: 500,
           headers,
           body: JSON.stringify({ 
             error: 'Invalid AI response format',
-            details: 'No JSON array found in AI response',
-            aiResponse: generatedText.substring(0, 500)
+            details: `No JSON array found in AI response. Finish reason: ${finishReason || 'unknown'}`,
+            aiResponse: generatedText.substring(0, 500),
+            finishReason: finishReason
           }),
         };
       }
       
       console.log('Found JSON match, length:', jsonMatch[0].length);
-      parsedWords = JSON.parse(jsonMatch[0]);
-      console.log('Successfully parsed JSON, word count:', parsedWords.length);
+      
+      try {
+        parsedWords = JSON.parse(jsonMatch[0]);
+        console.log('Successfully parsed JSON, word count:', parsedWords.length);
+      } catch (parseError) {
+        console.log('Initial JSON parsing failed, attempting partial recovery...');
+        console.log('Parse error:', parseError);
+        console.log('Finish reason was:', finishReason);
+        
+        // Attempt partial recovery for incomplete JSON
+        const partialResult = attemptPartialRecovery(jsonMatch[0], finishReason);
+        if (partialResult.success) {
+          parsedWords = partialResult.words;
+          isPartialResult = true;
+          console.log(`Partial recovery successful! Recovered ${parsedWords.length} words from incomplete JSON`);
+        } else {
+          throw new Error(`JSON parsing failed and partial recovery failed: ${partialResult.error}`);
+        }
+      }
       
       // Validate the structure
       if (!Array.isArray(parsedWords)) {
@@ -223,9 +390,13 @@ Return ONLY the JSON array, no other text.`;
       });
 
       console.log(`Successfully validated ${parsedWords.length} words`);
+      if (isPartialResult) {
+        console.log(`⚠️  PARTIAL RESULT: Retrieved ${parsedWords.length} out of ${count} requested words due to incomplete generation`);
+      }
 
     } catch (parseError) {
       console.error('Failed to parse AI response:', parseError);
+      console.error('Finish reason was:', finishReason);
       console.error('Raw response:', generatedText);
       return {
         statusCode: 500,
@@ -233,7 +404,8 @@ Return ONLY the JSON array, no other text.`;
         body: JSON.stringify({ 
           error: 'Failed to parse vocabulary list from AI response',
           details: parseError instanceof Error ? parseError.message : 'Unknown parsing error',
-          aiResponse: generatedText.substring(0, 500)
+          aiResponse: generatedText.substring(0, 500),
+          finishReason: finishReason
         }),
       };
     }
@@ -249,12 +421,19 @@ Return ONLY the JSON array, no other text.`;
       topic,
       words: uniqueWords,
       difficulty: 'intermediate',
-      count: uniqueWords.length
+      count: uniqueWords.length,
+      ...(isPartialResult && { 
+        warning: `Partial result: Generated ${uniqueWords.length} out of ${count} requested words`,
+        finishReason: finishReason
+      })
     };
 
     console.log('=== Sending successful response ===');
     console.log('Response word count:', response.count);
     console.log('Response structure:', Object.keys(response));
+    if (isPartialResult) {
+      console.log('⚠️  Response includes partial result warning');
+    }
 
     return {
       statusCode: 200,

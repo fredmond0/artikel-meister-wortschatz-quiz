@@ -40,7 +40,8 @@ export const handler: Handler = async (event, context) => {
       };
     }
 
-    // Quick health check with minimal request
+    // Quick health check with minimal request (same approach as get-sentence)
+    console.log('Calling Gemini API for health check...');
     const healthResponse = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
       {
@@ -59,10 +60,10 @@ export const handler: Handler = async (event, context) => {
             },
           ],
           generationConfig: {
-            temperature: 0.1,
+            temperature: 0.7,
             topK: 1,
             topP: 1,
-            maxOutputTokens: 10,
+            maxOutputTokens: 2048,
           },
         }),
       }
@@ -72,38 +73,17 @@ export const handler: Handler = async (event, context) => {
     console.log('Health check response ok:', healthResponse.ok);
 
     if (!healthResponse.ok) {
-      const errorText = await healthResponse.text();
-      console.error('Health check API error:', errorText);
-      return {
-        statusCode: 503,
-        headers,
-        body: JSON.stringify({ 
-          error: 'AI service unavailable',
-          details: `Health check failed: ${healthResponse.status}`,
-          apiResponse: errorText.substring(0, 200)
-        }),
-      };
+      throw new Error(`Gemini API error: ${healthResponse.status}`);
     }
 
     const healthData = await healthResponse.json();
-    console.log('Health check response structure:', Object.keys(healthData));
-    console.log('Health check candidates length:', healthData.candidates?.length || 0);
-    
-    const responseText = healthData.candidates?.[0]?.content?.parts?.[0]?.text;
-    console.log('Health check response text:', responseText);
+    const responseText = healthData.candidates[0]?.content?.parts[0]?.text;
 
     if (!responseText) {
-      console.error('Health check returned empty response');
-      return {
-        statusCode: 503,
-        headers,
-        body: JSON.stringify({ 
-          error: 'AI service not responding correctly',
-          details: 'Health check returned empty response',
-          debugInfo: JSON.stringify(healthData, null, 2).substring(0, 300)
-        }),
-      };
+      throw new Error('No response from Gemini');
     }
+
+    console.log('Health check successful, response:', responseText);
 
     return {
       statusCode: 200,

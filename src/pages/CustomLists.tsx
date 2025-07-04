@@ -46,6 +46,8 @@ interface TopicVocabularyResponse {
   words: CustomWord[];
   difficulty: string;
   count: number;
+  warning?: string;
+  finishReason?: string;
 }
 
 export function CustomLists() {
@@ -84,7 +86,7 @@ export function CustomLists() {
   const getTimeoutForWordCount = (count: number) => {
     if (count <= 25) return 35000;
     if (count <= 50) return 50000;
-    return 65000; // For 51-100 words
+    return 50000; // Max is now 50 words
   };
 
   const performHealthCheck = async () => {
@@ -131,15 +133,10 @@ export function CustomLists() {
     setLoadingStage('healthCheck');
 
     try {
-      // Step 1: Health Check (optional - continue if fails)
+      // Step 1: Health Check
       console.log('Performing health check...');
-      try {
-        await performHealthCheck();
-        console.log('Health check passed');
-      } catch (healthError) {
-        console.warn('Health check failed, continuing anyway:', healthError);
-        // Continue with vocabulary generation even if health check fails
-      }
+      await performHealthCheck();
+      console.log('Health check passed');
 
       // Step 2: Generate vocabulary
       setLoadingStage('generating');
@@ -207,14 +204,29 @@ export function CustomLists() {
 
       setPreviewList(previewListData);
       setLoadingStage('success');
-      setSuccess(`Generated ${data.count} words for "${data.topic}"`);
+      
+      // Show success message, including warning if it's a partial result
+      if (data.warning) {
+        setSuccess(`Generated ${data.count} words for "${data.topic}". ${data.warning}`);
+      } else {
+        setSuccess(`Successfully generated ${data.count} words for "${data.topic}"`);
+      }
+      
+      console.log('Generation completed successfully');
+      if (data.finishReason) {
+        console.log('Finish reason:', data.finishReason);
+      }
       
     } catch (error) {
       console.error('Error generating vocabulary:', error);
       setLoadingStage('error');
       
       if (error instanceof Error && error.name === 'AbortError') {
-        setError(`Request timed out after ${Math.round(getTimeoutForWordCount(wordCount) / 1000)} seconds. Try generating fewer words (≤${wordCount <= 25 ? '15' : wordCount <= 50 ? '25' : '50'}) or try again later.`);
+        if (loadingStage === 'healthCheck') {
+          setError('Health check timed out. The AI service may be unavailable. Please try again later.');
+        } else {
+          setError(`Request timed out after ${Math.round(getTimeoutForWordCount(wordCount) / 1000)} seconds. Try generating fewer words (≤${wordCount <= 25 ? '15' : '25'}) or try again later.`);
+        }
       } else if (error instanceof Error && error.message.includes('Sandbox.Timedout')) {
         setError('The AI service timed out. Try generating fewer words or a simpler topic.');
       } else if (error instanceof Error && error.message.includes('API key not configured')) {
@@ -224,6 +236,8 @@ export function CustomLists() {
       } else {
         setError(error instanceof Error ? error.message : 'Failed to generate vocabulary. Please try again.');
       }
+    } finally {
+      setIsGenerating(false);
     }
   };
 
@@ -370,14 +384,14 @@ export function CustomLists() {
                       <Slider
                         value={[wordCount]}
                         onValueChange={(value) => setWordCount(value[0])}
-                        max={100}
-                        min={10}
-                        step={5}
+                        max={50}
+                        min={5}
+                        step={1}
                         className="w-full"
                       />
                       <div className="flex justify-between text-xs text-gray-500 mt-1">
-                        <span>10</span>
-                        <span>100</span>
+                        <span>5</span>
+                        <span>50</span>
                       </div>
                     </div>
                   </div>
