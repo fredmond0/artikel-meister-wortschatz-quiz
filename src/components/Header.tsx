@@ -1,4 +1,4 @@
-import { Brain, BookOpen, Globe, BarChart3, List } from 'lucide-react';
+import { BookOpen, BarChart3, List } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -26,9 +26,6 @@ export function Header() {
               <div className="flex items-center gap-2">
                 <span className="text-xs font-small">allmydogseat</span>
               </div>
-            </div>
-            <div className="p-1.5 bg-white/10 rounded-full">
-              <BookOpen className="h-6 w-6" />
             </div>
           </div>
           

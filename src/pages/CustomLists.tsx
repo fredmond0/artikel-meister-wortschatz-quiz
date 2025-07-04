@@ -60,7 +60,7 @@ export function CustomLists() {
   
   // Form state
   const [topic, setTopic] = useState('');
-  const [wordCount, setWordCount] = useState(25);
+  const [wordCount, setWordCount] = useState(15);
   
   // Preview state
   const [previewList, setPreviewList] = useState<CustomWordList | null>(null);
@@ -90,9 +90,9 @@ export function CustomLists() {
     setSuccess(null);
 
     try {
-      // Create timeout controller for 25 seconds (slightly less than function timeout)
+      // Create timeout controller for 35 seconds (longer than function timeout)
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 25000);
+      const timeoutId = setTimeout(() => controller.abort(), 35000);
 
       const response = await fetch('/.netlify/functions/get-topic-vocabulary', {
         method: 'POST',
@@ -314,7 +314,7 @@ export function CustomLists() {
                   {isGenerating ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Generating vocabulary... (this may take 15-20 seconds)
+                      Generating vocabulary... (this may take 20-30 seconds)
                     </>
                   ) : (
                     <>

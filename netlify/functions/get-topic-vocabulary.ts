@@ -52,7 +52,7 @@ export const handler: Handler = async (event, context) => {
     const body: RequestBody = JSON.parse(event.body || '{}');
     console.log('Parsed request body:', JSON.stringify(body, null, 2));
     
-    const { topic, count = 25 } = body;
+    const { topic, count = 15 } = body;
 
     if (!topic || topic.trim().length === 0) {
       console.log('ERROR: Missing required field: topic');
@@ -129,10 +129,10 @@ Return ONLY the JSON array, no other text.`;
             },
           ],
           generationConfig: {
-            temperature: 0.3,
+            temperature: 0.7,
             topK: 1,
-            topP: 0.8,
-            maxOutputTokens: 2048,
+            topP: 1,
+            maxOutputTokens: 4096,
           },
         }),
       }
