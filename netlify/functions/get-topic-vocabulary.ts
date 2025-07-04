@@ -4,6 +4,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 interface RequestBody {
   topic: string;
   count?: number;
+  existingWords?: string[];
 }
 
 interface CustomWord {
@@ -42,7 +43,7 @@ export const handler: Handler = async (event) => {
   }
 
   try {
-    const { topic, count = 15 }: RequestBody = JSON.parse(event.body);
+    const { topic, count = 15, existingWords = [] }: RequestBody = JSON.parse(event.body);
     const apiKey = process.env.GEMINI_API_KEY;
 
     if (!apiKey) {
@@ -60,11 +61,21 @@ export const handler: Handler = async (event) => {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
-    const prompt = `Generate a JSON array of ${count} German vocabulary words for "${topic}".
+    let prompt;
+    if (existingWords.length > 0) {
+      prompt = `Generate a JSON array of ${count} German vocabulary words related to the topic "${topic}".
+These words have already been generated: ${existingWords.join(', ')}. Do NOT repeat them.
 Format: [{"german": "Wort", "article": "das", "type": "noun", "english": ["word"]}]
 - Nouns must have an article ('der', 'die', 'das').
 - Verbs and adjectives must have an empty string '' for the article.
 - Return ONLY the raw JSON array, with no markdown formatting.`;
+    } else {
+      prompt = `Generate a JSON array of ${count} German vocabulary words for "${topic}".
+Format: [{"german": "Wort", "article": "das", "type": "noun", "english": ["word"]}]
+- Nouns must have an article ('der', 'die', 'das').
+- Verbs and adjectives must have an empty string '' for the article.
+- Return ONLY the raw JSON array, with no markdown formatting.`;
+    }
 
     const streamingResult = await model.generateContentStream(prompt);
 

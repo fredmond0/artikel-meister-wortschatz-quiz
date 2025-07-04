@@ -58,6 +58,7 @@ export function CustomLists() {
     includeDefault: true
   });
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isAddingMore, setIsAddingMore] = useState(false);
   const [loadingStage, setLoadingStage] = useState<'healthCheck' | 'generating' | 'processing' | 'success' | 'error'>('healthCheck');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -95,6 +96,8 @@ export function CustomLists() {
       return;
     }
 
+    // Reset previous results when starting a new generation
+    setPreviewList(null); 
     setIsGenerating(true);
     setError(null);
     setSuccess(null);
@@ -196,6 +199,54 @@ export function CustomLists() {
       }
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleGenerateMore = async () => {
+    if (!previewList) return;
+
+    setIsAddingMore(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const existingWords = previewList.words;
+      const response = await fetch('/.netlify/functions/get-topic-vocabulary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topic: previewList.topic,
+          count: 25, // Request another batch
+          existingWords: existingWords.map(w => w.german), // Send existing words for context
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate more words.');
+      }
+
+      const data: TopicVocabularyResponse = await response.json();
+      
+      const newWords = data.words.filter(newWord => 
+        !existingWords.some(existingWord => existingWord.german === newWord.german)
+      );
+
+      setPreviewList(prev => {
+        if (!prev) return null;
+        const updatedWords = [...prev.words, ...newWords];
+        return {
+          ...prev,
+          words: updatedWords,
+          wordCount: updatedWords.length,
+        };
+      });
+
+      setSuccess(`Added ${newWords.length} more words to the list.`);
+
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'An unknown error occurred.');
+    } finally {
+      setIsAddingMore(false);
     }
   };
 
@@ -339,14 +390,14 @@ export function CustomLists() {
                       <Slider
                         value={[wordCount]}
                         onValueChange={(value) => setWordCount(value[0])}
-                        max={50}
+                        max={25}
                         min={5}
                         step={1}
                         className="w-full"
                       />
                       <div className="flex justify-between text-xs text-gray-500 mt-1">
                         <span>5</span>
-                        <span>50</span>
+                        <span>25</span>
                       </div>
                     </div>
                   </div>
@@ -403,7 +454,17 @@ export function CustomLists() {
                       <Plus className="h-4 w-4 mr-2" />
                       Save List
                     </Button>
-                    <Button variant="outline" onClick={() => setPreviewList(null)}>
+                    <Button 
+                      onClick={handleGenerateMore}
+                      disabled={isAddingMore || (previewList?.words.length ?? 0) >= 50}
+                      className="flex-1"
+                      variant="outline"
+                    >
+                      {isAddingMore ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
+                      Add more words
+                    </Button>
+                    <Button variant="destructive" onClick={() => setPreviewList(null)}>
+                      <Trash2 className="h-4 w-4 mr-2" />
                       Discard
                     </Button>
                   </div>
