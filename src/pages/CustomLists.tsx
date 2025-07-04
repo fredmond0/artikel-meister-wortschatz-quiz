@@ -89,6 +89,10 @@ export function CustomLists() {
     setSuccess(null);
 
     try {
+      // Create timeout controller for 25 seconds (slightly less than function timeout)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 25000);
+
       const response = await fetch('/.netlify/functions/get-topic-vocabulary', {
         method: 'POST',
         headers: {
@@ -98,7 +102,10 @@ export function CustomLists() {
           topic: topic.trim(),
           count: wordCount
         }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       console.log('Response status:', response.status);
       console.log('Response ok:', response.ok);
@@ -145,7 +152,13 @@ export function CustomLists() {
       
     } catch (error) {
       console.error('Error generating vocabulary:', error);
-      setError(error instanceof Error ? error.message : 'Failed to generate vocabulary. Please try again.');
+      if (error instanceof Error && error.name === 'AbortError') {
+        setError('Request timed out. The AI service is taking longer than expected. Please try a smaller word count (10-15 words) or try again later.');
+      } else if (error instanceof Error && error.message.includes('Sandbox.Timedout')) {
+        setError('The AI service timed out. Try generating fewer words (10-15) or a simpler topic.');
+      } else {
+        setError(error instanceof Error ? error.message : 'Failed to generate vocabulary. Please try again.');
+      }
     } finally {
       setIsGenerating(false);
     }
@@ -306,7 +319,7 @@ export function CustomLists() {
                   {isGenerating ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Generating...
+                      Generating vocabulary... (this may take 15-20 seconds)
                     </>
                   ) : (
                     <>

@@ -86,37 +86,16 @@ export const handler: Handler = async (event, context) => {
       };
     }
 
-    const prompt = `Generate a list of exactly ${count} German words related to the topic "${topic}".
-    
-    Requirements:
-    - Include a mix of common and moderately complex words suitable for intermediate learners
-    - Each word must be relevant to the topic "${topic}"
-    - Include a variety of word types (nouns, verbs, adjectives, etc.)
-    - For nouns: provide the bare noun WITHOUT the article in the "german" field, and put the correct article (der, die, das) in the "article" field
-    - For non-nouns: use an empty string for the article
-    - Provide accurate English translations
-    
-    IMPORTANT: Do NOT include the article in the German word itself. For example:
-    - CORRECT: "german": "Koch", "article": "der"
-    - WRONG: "german": "der Koch", "article": "der"
-    
-    Return ONLY a valid JSON array with exactly this structure:
-    [
-      {
-        "german": "Rakete",
-        "article": "die",
-        "type": "noun",
-        "english": ["rocket", "missile"]
-      },
-      {
-        "german": "erforschen",
-        "article": "",
-        "type": "verb", 
-        "english": ["to explore", "to research"]
-      }
-    ]
-    
-    Do not include any text before or after the JSON array. The response must be valid JSON that can be parsed directly.`;
+    const prompt = `Create ${count} German words for "${topic}". Return ONLY valid JSON array:
+
+[{"german":"word","article":"der/die/das or empty","type":"noun/verb/adj","english":["translation"]}]
+
+Rules:
+- German word WITHOUT article 
+- Article separate: der/die/das for nouns, "" for others
+- Mix nouns/verbs/adjectives
+- One English translation per word
+- No extra text, just JSON`;
 
     console.log('Calling Gemini API...');
     console.log('Prompt length:', prompt.length);
@@ -142,10 +121,10 @@ export const handler: Handler = async (event, context) => {
             },
           ],
           generationConfig: {
-            temperature: 0.7,
+            temperature: 0.3,
             topK: 1,
-            topP: 1,
-            maxOutputTokens: 4096,
+            topP: 0.8,
+            maxOutputTokens: 2048,
           },
         }),
       }
