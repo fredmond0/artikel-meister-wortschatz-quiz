@@ -154,7 +154,6 @@ function attemptPartialRecovery(jsonString: string, finishReason?: string): Part
 }
 
 export const handler: Handler = async (event, context) => {
-  // Handle CORS
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',
@@ -162,6 +161,9 @@ export const handler: Handler = async (event, context) => {
     'Content-Type': 'application/json',
   };
 
+  // Set explicit timeout for this function
+  context.callbackWaitsForEmptyEventLoop = false;
+  
   if (event.httpMethod === 'OPTIONS') {
     return {
       statusCode: 200,
@@ -170,19 +172,27 @@ export const handler: Handler = async (event, context) => {
     };
   }
 
-  if (event.httpMethod !== 'POST') {
-    return {
-      statusCode: 405,
-      headers,
-      body: JSON.stringify({ error: 'Method not allowed' }),
-    };
-  }
-
+  console.log('=== Topic vocabulary function called ===');
+  console.log('Method:', event.httpMethod);
+  console.log('Body received:', event.body);
+  
   try {
-    console.log('=== Topic vocabulary function called ===');
-    console.log('Method:', event.httpMethod);
-    console.log('Body received:', event.body);
-    
+    if (event.httpMethod !== 'POST') {
+      return {
+        statusCode: 405,
+        headers,
+        body: JSON.stringify({ error: 'Method not allowed' }),
+      };
+    }
+
+    if (!event.body) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Request body is required' }),
+      };
+    }
+
     const body: RequestBody = JSON.parse(event.body || '{}');
     const topic = body.topic?.trim();
     let count = body.count || 15;
