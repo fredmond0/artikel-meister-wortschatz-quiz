@@ -432,10 +432,82 @@ export function Progress() {
                     <div className="text-center p-3 bg-blue-50 rounded-lg border border-blue-200">
                       <div className="text-xl font-bold text-blue-600">{wordsInProgress}</div>
                       <div className="text-xs text-gray-600">In Progress</div>
+                      {wordsInProgress > 0 && (
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="sm" className="mt-1 h-6 text-xs">
+                              <ListChecks className="h-3 w-3 mr-1" />
+                              View List
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent className="max-w-2xl max-h-[70vh] overflow-y-auto">
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Words In Progress ({wordsInProgress})</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                These are words you've started learning but haven't yet mastered (need {settings.masteryThreshold} correct answers).
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 my-4">
+                              {wordsByCategory.inProgress.map(({ word, progress }) => (
+                                <div key={word.german} className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-200">
+                                  <div className="flex-1">
+                                    <div className="font-medium text-blue-800">
+                                      {word.article} {word.german}
+                                    </div>
+                                    <div className="text-sm text-blue-600">{word.english}</div>
+                                  </div>
+                                  <div className="text-xs text-blue-500">
+                                    {progress.correctCount}/{progress.totalSeen}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                            <AlertDialogFooter>
+                              <AlertDialogAction>Close</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      )}
                     </div>
                     <div className="text-center p-3 bg-gray-50 rounded-lg border border-gray-200">
                       <div className="text-xl font-bold text-gray-600">{wordsNotStarted}</div>
                       <div className="text-xs text-gray-600">Not Started</div>
+                      {wordsNotStarted > 0 && (
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="sm" className="mt-1 h-6 text-xs">
+                              <ListChecks className="h-3 w-3 mr-1" />
+                              View List
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent className="max-w-2xl max-h-[70vh] overflow-y-auto">
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Words Not Started ({wordsNotStarted})</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                These are words you haven't encountered yet in the quiz.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 my-4">
+                              {wordsByCategory.notStarted.map((word) => (
+                                <div key={word.german} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                  <div className="flex-1">
+                                    <div className="font-medium text-gray-800">
+                                      {word.article} {word.german}
+                                    </div>
+                                    <div className="text-sm text-gray-600">{word.english}</div>
+                                  </div>
+                                  <div className="text-xs text-gray-500">
+                                    New
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                            <AlertDialogFooter>
+                              <AlertDialogAction>Close</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      )}
                     </div>
                   </div>
 
